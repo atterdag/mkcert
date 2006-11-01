@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# $Id: mkcert.pl,v 1.1 2006-10-21 09:10:55 atterdag Exp $
+# $Id: mkcert.pl,v 1.2 2006-11-01 02:35:47 atterdag Exp $
 #
 # AUTHOR: Valdemar Lemche <valdemar@lemche.net>
 #
@@ -537,7 +537,7 @@ chgrp ssl $configuration{'ssldir'}/private/$configuration{'fqdn'}-key.pem
 umask 0122
 
 # Generate the certificate and signs it with the ca-key
-openssl ca -out $configuration{'ssldir'}/$configuration{'fqdn'}-cert.pem -policy policy_anything -batch -infiles $configuration{'ssldir'}/$configuration{'fqdn'}-req.pem
+openssl ca -config $configuration{'ssldir'}/configs/$configuration{'fqdn'}.cnf -out $configuration{'ssldir'}/$configuration{'fqdn'}-cert.pem -policy policy_anything -batch -infiles $configuration{'ssldir'}/$configuration{'fqdn'}-req.pem
 
 # Restores the old umask
 umask \${UMASK}
