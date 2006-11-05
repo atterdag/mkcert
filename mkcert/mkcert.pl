@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# $Id: mkcert.pl,v 1.3 2006-11-05 15:24:20 atterdag Exp $
+# $Id: mkcert.pl,v 1.4 2006-11-05 23:45:31 atterdag Exp $
 #
 # AUTHOR: Valdemar Lemche <valdemar@lemche.net>
 #
@@ -20,6 +20,14 @@
 # This will create in a certificate plus key.
 #
 # CHANGELOG:
+# mkcert.pl (0.3b) stable; urgency=low
+#
+#   * Added PEM to DER conversion to generation scripts
+#   * Generate Renewal script
+#   * Generate Revokation script
+#
+#  -- Valdemar Lemche <valdemar@lemche.net>  Mon, 6 Nov 2006 00:44 +0100
+#
 # mkcert.pl (0.2b) stable; urgency=low
 #
 #   * Changed fqdn switch to commonName
@@ -62,80 +70,85 @@ GetOptions(
 	    'conf=s'           => \$configuration{'file'}
 );
 
-my $syntax =
-"Usage: mkcert -commonName <commonName> [-subjectAltName <subjectAltName> [-subjectAltName <subjectAltName>]] [-conf <configuration-file>]\n";
-
-# If commonName have not been defined then die
-die $syntax . "\n\tcommonName have not been set -- exitting!\n\n" if !( $configuration{'commonName'} );
-
-# If commonName have been defined but subjectAltNamethen die
-foreach my $subjectAltName ( @{ $configuration{'subjectAltNames'} } ) {
-	unless (    ( $subjectAltName =~ /^email:/ )
-		 || ( $subjectAltName =~ /^URI:/ )
-		 || ( $subjectAltName =~ /^DNS:/ )
-		 || ( $subjectAltName =~ /^RID:/ )
-		 || ( $subjectAltName =~ /^IP:/ )
-		 || ( $subjectAltName =~ /^dirName:/ )
-		 || ( $subjectAltName =~ /^otherName:/ ) )
-	{
-		die $syntax . "
-	subjectAltName can be one of the following:
-
-		email: <an email address>
-		URI: <a uniform resource indicator>
-		DNS: <a DNS domain name>
-		RID: <a registered ID: OBJECT IDENTIFIER>
-		IP: <an IP address>
-		dirName: <a distinguished name>
-		otherName: <otherName can include arbitrary data associated
-		           with an OID: the value should be the OID followed
-		           by a semicolon and the content in standard
-		           ASN1_generate_nconf() format.
-
-";
-	}
-}
-
-# If a configuration file was not defined as a option
-unless ( $configuration{'file'} ) {
-
-	# Then set a default one
-	$configuration{'file'} = "./mkcert.cfg";
-}
+# Valid options supplied with script
+&validate_options();
 
 # Read parameters from the configuration file
 &read_configuration_file( $configuration{'file'} );
 
 # Do some sanity checks
-&checks();
+&sanity_checks();
 
 # Make the openssl.cnf configuration for commonName
-&make_cnf();
+&make_openssl_cnf();
 
 # Generate the script which can generate the certificate
-&generate_script();
+&make_creation_script();
+
+# Generate the script which can generate the certificate
+&make_signing_script();
+
+# Generate the script which can revokes the certificate
+&make_revokation_script();
+
+# Generate the script which can renews the certificate
+&make_renewal_script();
 
 # Print a summary
 &summary();
 
-# Should we just run the generation script now?
-print "Run script now? [yes]: ";
+# Run scripts?
+&run_scripts();
 
-# Read input from STDIN
-my $answer = <STDIN>;
+sub validate_options {
 
-# Strip line-ending
-chomp($answer);
+	print "Validating options ...\n";
 
-# If input equals something with yes or just [ENTER]
-if ( $answer eq "yes" || $answer eq "y" || $answer eq "Y" || $answer eq "" ) {
+	my $syntax =
+"Usage: mkcert -commonName <commonName> [-subjectAltName <subjectAltName> [-subjectAltName <subjectAltName>]] [-conf <configuration-file>]\n";
 
-	# then run the script
-	system("$configuration{'ssldir'}/scripts/$configuration{'commonName'}.sh");
+	# If commonName have not been defined then die
+	die $syntax . "\n\tcommonName have not been set -- exitting!\n\n" if !( $configuration{'commonName'} );
+
+	# If commonName have been defined but subjectAltNamethen die
+	foreach my $subjectAltName ( @{ $configuration{'subjectAltNames'} } ) {
+		unless (    ( $subjectAltName =~ /^email:/ )
+			 || ( $subjectAltName =~ /^URI:/ )
+			 || ( $subjectAltName =~ /^DNS:/ )
+			 || ( $subjectAltName =~ /^RID:/ )
+			 || ( $subjectAltName =~ /^IP:/ )
+			 || ( $subjectAltName =~ /^dirName:/ )
+			 || ( $subjectAltName =~ /^otherName:/ ) )
+		{
+			die $syntax . "
+		subjectAltName can be the following:
+
+			email: <an email address>
+			URI: <a uniform resource indicator>
+			DNS: <a DNS domain name>
+			RID: <a registered ID: OBJECT IDENTIFIER>
+			IP: <an IP address>
+			dirName: <a distinguished name>
+			otherName: <otherName can include arbitrary data associated
+			           with an OID: the value should be the OID followed
+			           by a semicolon and the content in standard
+			           ASN1_generate_nconf() format.
+
+";
+		}
+	}
+
+	# If a configuration file was not defined as a option
+	unless ( $configuration{'file'} ) {
+
+		# Then set a default one
+		$configuration{'file'} = "./mkcert.cfg";
+	}
+
 }
 
 sub read_configuration_file {
-	print "Reading configuration file:\n";
+	print "Reading configuration file ...\n";
 
 	# Defines the required parameters in the configuration file
 	@{ $configuration{'parameters'}->{'required'} } = qw(
@@ -206,6 +219,7 @@ sub read_configuration_file {
 		# Defines a validation check
 		our $validated = 0;
 
+		# iterate over parameter groups
 		foreach my $valid_parameters_group ( keys( %{ $configuration{'parameters'} } ) ) {
 
 			# For each valid parameter
@@ -257,9 +271,9 @@ sub read_configuration_file {
 	}
 }
 
-sub checks {
+sub sanity_checks {
 
-	print "Checks if files and directories exist:\n";
+	print "Checks if files and directories exist ...\n";
 
 	# if directory where cnf files are placed doens't exist, then create it'
 	&check_directory( $configuration{'ssldir'} . "/configs" );
@@ -320,9 +334,9 @@ sub check_ca {
 	}
 }
 
-sub make_cnf {
+sub make_openssl_cnf {
 
-	print "Generating OpenSSL configuration:\n";
+	print "Generating OpenSSL configuration ...\n";
 
 	# Open the .cnf file
 	open( CNF, " >$configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf" )
@@ -489,73 +503,240 @@ EOT
 	  . $! . "\n";
 }
 
-sub generate_script {
-	print "Generating script: \n";
+sub make_creation_script {
+	print "Generating key and certificate request creation script ... \n";
 
 	# Get localtime
 	my $date = localtime();
 
 	# Open the certificate generation script
-	open( SCRIPT, ">$configuration{'ssldir'}/scripts/$configuration{'commonName'}.sh" )
+	open( SCRIPT, ">$configuration{'ssldir'}/scripts/create-$configuration{'commonName'}.sh" )
 	  || die "FAILED\ncannot open file, "
 	  . $configuration{'ssldir'}
-	  . "/scripts/"
+	  . "/scripts/create-"
 	  . $configuration{'commonName'} . ".sh"
 	  . $! . "\n";
 	print SCRIPT <<EOF;
 #!/bin/sh
 #
-# This script generates the CSR, CRT and KEY for the CommonName:
+# This script generates the CSR and KEY for the CommonName:
 #
 #	$configuration{'commonName'}
-#
-# And signs it with the CA key:
-#
-#	$configuration{'cakey'}
 #
 # This script was generated by mkcert.pl at $date
 #
 
-# Record the PWD you're at'
+echo "Running $configuration{'ssldir'}/scripts/create-$configuration{'commonName'}.sh"
+
+echo "Recording the PWD you're at"
 pushd .
 
-# Go to you OpenSSL directory
-cd $configuration{'ssldir'}
+echo "Going to your OpenSSL directory"
+cd "$configuration{'ssldir'}"
 
-# Record your old umask
+echo "Recording your old umask"
 UMASK=`umask`
 
-# Set a new strict umask
+echo "Setting a new strict umask"
 umask 0127
 
-# Generate certificate req and certificate private key
-openssl req -outform PEM -out $configuration{'ssldir'}/$configuration{'commonName'}-req.pem -newkey rsa:1024 -nodes -config $configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf -batch
+echo "Generate certificate req and certificate private key"
+openssl req -outform PEM -out "$configuration{'ssldir'}/$configuration{'commonName'}-req.pem" -newkey rsa:1024 -nodes -config "$configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf" -batch
 
-# Loosens the permissions on CSR
-chmod 0644 $configuration{'ssldir'}/$configuration{'commonName'}-req.pem
+echo "Loosens the permissions on CSR"
+chmod 0644 "$configuration{'ssldir'}/$configuration{'commonName'}-req.pem"
 
-# Changes the group ownership of the private key
-chgrp ssl $configuration{'ssldir'}/private/$configuration{'commonName'}-key.pem
+echo "Changes the group ownership of the private key"
+chgrp ssl "$configuration{'ssldir'}/private/$configuration{'commonName'}-key.pem"
 
-# Sets a looser umask
-umask 0122
-
-# Generate the certificate and signs it with the ca-key
-openssl ca -config $configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf -out $configuration{'ssldir'}/$configuration{'commonName'}-cert.pem -policy policy_anything -batch -infiles $configuration{'ssldir'}/$configuration{'commonName'}-req.pem
-
-# Restores the old umask
+echo "Restores the old umask"
 umask \${UMASK}
 
-# Return to old PWD
+echo "Return to old PWD"
+popd
+
+echo "Running the signing script"
+. "$configuration{'ssldir'}/scripts/sign-$configuration{'commonName'}.sh"
+EOF
+	close(SCRIPT)
+	  || die "FAILED\ncannot close file, "
+	  . $configuration{'ssldir'}
+	  . "/scripts/create-"
+	  . $configuration{'commonName'} . ".sh"
+	  . $! . "\n";
+	chmod( 0755, "$configuration{'ssldir'}/scripts/create-$configuration{'commonName'}.sh" );
+
+}
+
+sub make_signing_script {
+	print "Generating certificate request signing script ... \n";
+
+	# Get localtime
+	my $date = localtime();
+
+	# Open the signing script
+	open( SCRIPT, ">$configuration{'ssldir'}/scripts/sign-$configuration{'commonName'}.sh" )
+	  || die "FAILED\ncannot open file, "
+	  . $configuration{'ssldir'}
+	  . "/scripts/sign-"
+	  . $configuration{'commonName'} . ".sh"
+	  . $! . "\n";
+	print SCRIPT <<EOF;
+#!/bin/sh
+#
+# This script sign the CSR for the CommonName:
+#
+#	$configuration{'commonName'}
+#
+# With the CA key:
+#
+#	$configuration{'cakey'}
+#
+# Which creates the certificate:
+#
+#	$configuration{'ssldir'}/$configuration{'commonName'}-cert.pem
+#
+# This script was generated by mkcert.pl at $date
+#
+
+echo "Running $configuration{'ssldir'}/scripts/sign-$configuration{'commonName'}.sh"
+
+echo "Recording the PWD you're at"
+pushd .
+
+echo "Going to your OpenSSL directory"
+cd "$configuration{'ssldir'}"
+
+echo "Recording your old umask"
+UMASK=`umask`
+
+echo "Sets a looser umask"
+umask 0122
+
+echo "Generate the certificate and signs it with the ca-key"
+openssl ca -config "$configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf" -out "$configuration{'ssldir'}/$configuration{'commonName'}-cert.pem" -policy policy_anything -batch -infiles "$configuration{'ssldir'}/$configuration{'commonName'}-req.pem"
+
+echo "Create DER formatted certificate from the PEM formatted certificate"
+openssl x509 -in "$configuration{'ssldir'}/$configuration{'commonName'}-cert.pem" -out "$configuration{'ssldir'}/$configuration{'commonName'}-cert.der" -outform DER
+
+echo "Setting a more scrict umask"
+umask 0120
+
+echo "Creating PKCS12 formatted certificate from the PEM formatted certificate and PEM formmated key"
+openssl pkcs12 -export -in "$configuration{'ssldir'}/$configuration{'commonName'}-cert.pem" -inkey "$configuration{'ssldir'}/private/$configuration{'commonName'}-key.pem" -out "$configuration{'ssldir'}/$configuration{'commonName'}-cert.p12" -name "$configuration{'commonName'}"
+
+echo "Restores the old umask"
+umask \${UMASK}
+
+echo "Return to old PWD"
 popd
 EOF
 	close(SCRIPT)
 	  || die "FAILED\ncannot close file, "
 	  . $configuration{'ssldir'}
-	  . "/scripts/"
+	  . "/scripts/sign-"
 	  . $configuration{'commonName'} . ".sh"
 	  . $! . "\n";
-	chmod( 0755, "$configuration{'ssldir'}/scripts/$configuration{'commonName'}.sh" );
+	chmod( 0755, "$configuration{'ssldir'}/scripts/sign-$configuration{'commonName'}.sh" );
+
+}
+
+sub make_revokation_script {
+	print "Generating revokation script ... \n";
+
+	# Get localtime
+	my $date = localtime();
+
+	# Open the certificate revokation script
+	open( SCRIPT, ">$configuration{'ssldir'}/scripts/revoke-$configuration{'commonName'}.sh" )
+	  || die "FAILED\ncannot open file, "
+	  . $configuration{'ssldir'}
+	  . "/scripts/revoke-"
+	  . $configuration{'commonName'} . ".sh"
+	  . $! . "\n";
+	print SCRIPT <<EOF;
+#!/bin/sh
+#
+# This script revokes the certificate with the CommonName:
+#
+#	$configuration{'commonName'}
+#
+# This script was generated by mkcert.pl at $date
+#
+
+echo "Running $configuration{'ssldir'}/scripts/revoke-$configuration{'commonName'}.sh"
+echo "Recording the PWD you're at"
+pushd .
+
+echo "Going to your OpenSSL directory"
+cd "$configuration{'ssldir'}"
+
+echo "Revokes the script at update key database"
+openssl ca -config "$configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf" -revoke "$configuration{'ssldir'}/$configuration{'commonName'}-cert.pem"
+
+echo "Generate/updates certificate revokation list"
+openssl ca -config "$configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf" -gencrl -out "$configuration{'ssldir'}/crl/ca.crl"
+
+echo "Returning to old PWD"
+popd
+EOF
+	close(SCRIPT)
+	  || die "FAILED\ncannot close file, "
+	  . $configuration{'ssldir'}
+	  . "/scripts/revoke-"
+	  . $configuration{'commonName'} . ".sh"
+	  . $! . "\n";
+	chmod( 0755, "$configuration{'ssldir'}/scripts/revoke-$configuration{'commonName'}.sh" );
+
+}
+
+sub make_renewal_script {
+	print "Generating renewal script ... \n";
+
+	# Get localtime
+	my $date = localtime();
+
+	# Open the certificate renewal script
+	open( SCRIPT, ">$configuration{'ssldir'}/scripts/renew-$configuration{'commonName'}.sh" )
+	  || die "FAILED\ncannot open file, "
+	  . $configuration{'ssldir'}
+	  . "/scripts/renew-"
+	  . $configuration{'commonName'} . ".sh"
+	  . $! . "\n";
+	print SCRIPT <<EOF;
+#!/bin/sh
+#
+# This script renews the certificate with the CommonName:
+#
+#	$configuration{'commonName'}
+#
+# This script was generated by mkcert.pl at $date
+#
+
+echo "Running $configuration{'ssldir'}/scripts/renew-$configuration{'commonName'}.sh"
+
+echo "Record the PWD you're at"
+pushd .
+
+echo "Going to your OpenSSL directory"
+cd "$configuration{'ssldir'}"
+
+echo "Calls the revokation script to revoke old certificate"
+. "$configuration{'ssldir'}/scripts/revoke-$configuration{'commonName'}.sh"
+
+echo "Calls the signing script to generate a new signed certificate from the CSR"
+. "$configuration{'ssldir'}/scripts/sign-$configuration{'commonName'}.sh"
+
+echo "Return to old PWD"
+popd
+EOF
+	close(SCRIPT)
+	  || die "FAILED\ncannot close file, "
+	  . $configuration{'ssldir'}
+	  . "/scripts/renew-"
+	  . $configuration{'commonName'} . ".sh"
+	  . $! . "\n";
+	chmod( 0755, "$configuration{'ssldir'}/scripts/renew-$configuration{'commonName'}.sh" );
 
 }
 
@@ -565,6 +746,32 @@ sub summary {
 	print "\n\nSUMMARY:\n\n";
 	print "OpenSSL configuration for this server certificate is saved as:\n";
 	print "\t" . $configuration{'ssldir'} . "/configs/" . $configuration{'commonName'} . ".cnf\n\n";
-	print "Script to generate certificate and key is saved as:\n";
-	print "\t" . $configuration{'ssldir'} . "/scripts/" . $configuration{'commonName'} . ".sh\n\n";
+	print "Script to generate certificate request and key is saved as:\n";
+	print "\t" . $configuration{'ssldir'} . "/scripts/create-" . $configuration{'commonName'} . ".sh\n\n";
+	print "Script to sign certificate request and generate signed certificate is saved as:\n";
+	print "\t" . $configuration{'ssldir'} . "/scripts/sign-" . $configuration{'commonName'} . ".sh\n\n";
+	print "Script to renew a certificate is saved as:\n";
+	print "\t" . $configuration{'ssldir'} . "/scripts/renew-" . $configuration{'commonName'} . ".sh\n\n";
+	print "Script to revoke a certificate is saved as:\n";
+	print "\t" . $configuration{'ssldir'} . "/scripts/revoke-" . $configuration{'commonName'} . ".sh\n\n";
 }
+
+sub run_scripts {
+
+	# Should we just run the generation script now?
+	print "Run creation script now (this also signs the CSR)? [yes]: ";
+
+	# Read input from STDIN
+	my $answer = <STDIN>;
+
+	# Strip line-ending
+	chomp($answer);
+
+	# If input equals something with yes or just [ENTER]
+	if ( $answer eq "yes" || $answer eq "y" || $answer eq "Y" || $answer eq "" ) {
+
+		# then run the script
+		system("\"$configuration{'ssldir'}/scripts/create-$configuration{'commonName'}.sh\"");
+	}
+}
+
