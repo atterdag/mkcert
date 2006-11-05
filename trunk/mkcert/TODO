@@ -1,5 +1,4 @@
 * Add PEM to DER conversion to generation script
-* Change fqdn switch to CN, and cname to subjectAltName. Add syntax checking to the values of subjectAltName
 * Add switch to either generate Server Certificate or Personal Certificate
 * Generate Renewal script
 * Generate Revokation script

@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# $Id: mkcert.pl,v 1.2 2006-11-01 02:35:47 atterdag Exp $
+# $Id: mkcert.pl,v 1.3 2006-11-05 15:24:20 atterdag Exp $
 #
 # AUTHOR: Valdemar Lemche <valdemar@lemche.net>
 #
@@ -15,11 +15,20 @@
 # Edit ./mkcert.cfg (the parameters is described in the file), and run the
 # command:
 #
-#       # ./mkcert.pl -fqdn <fqdn> [-cname cname1 [-cname cname2]]
+#       # ./mkcert.pl -commonName <commonName> [-subjectAltName <subjectAltName> [-subjectAltName <subjectAltName>]]
 #
 # This will create in a certificate plus key.
 #
 # CHANGELOG:
+# mkcert.pl (0.2b) stable; urgency=low
+#
+#   * Changed fqdn switch to commonName
+#   * Changed cname switch to subjectAltName
+#   * Optimized sanity check code
+#   * Added syntax checking of subjectAltName values
+#
+#  -- Valdemar Lemche <valdemar@lemche.net>  Sun, 5 Nov 2006 16:21 +0100
+#
 # mkcert.pl (0.1b) stable; urgency=low
 #
 #   * Initial release
@@ -48,15 +57,44 @@ our (%configuration);
 
 # Get the options from the command line
 GetOptions(
-	    'cname=s' => \@{ $configuration{'cnames'} },
-	    'fqdn=s'  => \$configuration{'fqdn'},
-	    'conf=s'  => \$configuration{'file'}
+	    'subjectAltName=s' => \@{ $configuration{'subjectAltNames'} },
+	    'commonName=s'     => \$configuration{'commonName'},
+	    'conf=s'           => \$configuration{'file'}
 );
 
-# If FQDN have not been defined then die
-die
-"Usage: mkcert -fqdn <FQDN> [-cname CNAME[,CNAME]] [-conf configuration-file]\n\n\tFQDN have not been set -- exitting!\n\n"
-  if !( $configuration{'fqdn'} );
+my $syntax =
+"Usage: mkcert -commonName <commonName> [-subjectAltName <subjectAltName> [-subjectAltName <subjectAltName>]] [-conf <configuration-file>]\n";
+
+# If commonName have not been defined then die
+die $syntax . "\n\tcommonName have not been set -- exitting!\n\n" if !( $configuration{'commonName'} );
+
+# If commonName have been defined but subjectAltNamethen die
+foreach my $subjectAltName ( @{ $configuration{'subjectAltNames'} } ) {
+	unless (    ( $subjectAltName =~ /^email:/ )
+		 || ( $subjectAltName =~ /^URI:/ )
+		 || ( $subjectAltName =~ /^DNS:/ )
+		 || ( $subjectAltName =~ /^RID:/ )
+		 || ( $subjectAltName =~ /^IP:/ )
+		 || ( $subjectAltName =~ /^dirName:/ )
+		 || ( $subjectAltName =~ /^otherName:/ ) )
+	{
+		die $syntax . "
+	subjectAltName can be one of the following:
+
+		email: <an email address>
+		URI: <a uniform resource indicator>
+		DNS: <a DNS domain name>
+		RID: <a registered ID: OBJECT IDENTIFIER>
+		IP: <an IP address>
+		dirName: <a distinguished name>
+		otherName: <otherName can include arbitrary data associated
+		           with an OID: the value should be the OID followed
+		           by a semicolon and the content in standard
+		           ASN1_generate_nconf() format.
+
+";
+	}
+}
 
 # If a configuration file was not defined as a option
 unless ( $configuration{'file'} ) {
@@ -71,7 +109,7 @@ unless ( $configuration{'file'} ) {
 # Do some sanity checks
 &checks();
 
-# Make the openssl.cnf configuration for FQDN
+# Make the openssl.cnf configuration for commonName
 &make_cnf();
 
 # Generate the script which can generate the certificate
@@ -93,14 +131,14 @@ chomp($answer);
 if ( $answer eq "yes" || $answer eq "y" || $answer eq "Y" || $answer eq "" ) {
 
 	# then run the script
-	system("$configuration{'ssldir'}/scripts/$configuration{'fqdn'}.sh");
+	system("$configuration{'ssldir'}/scripts/$configuration{'commonName'}.sh");
 }
 
 sub read_configuration_file {
-	print "Reading configuration file: ";
+	print "Reading configuration file:\n";
 
 	# Defines the required parameters in the configuration file
-	@{ $configuration{'required_parameters'} } = qw(
+	@{ $configuration{'parameters'}->{'required'} } = qw(
 	  days
 	  country
 	  locality
@@ -112,7 +150,7 @@ sub read_configuration_file {
 	);
 
 	# Defines the optional parameters in the configuration file
-	@{ $configuration{'optional_parameters'} } = qw(
+	@{ $configuration{'parameters'}->{'optional'} } = qw(
 	  cacert
 	  cakey
 	  issuerAltName
@@ -120,7 +158,7 @@ sub read_configuration_file {
 	);
 
 	# Defines the optional netscape parameters in the configuration file
-	@{ $configuration{'netscape_parameters'} } = qw(
+	@{ $configuration{'parameters'}->{'netscape'} } = qw(
 	  nsBaseUrl
 	  nsCaRevocationUrl
 	  nsRevocationUrl
@@ -156,35 +194,41 @@ sub read_configuration_file {
 		# Splits the line into parameter and value
 		my ( $parameter, $value ) = split( / = /, $line );
 
-		# Strips any trailing spaces
+		# Strips any trailing spaces for parameter
 		$parameter =~ s/\s+$//g;
 
-		# Strips any leading spaces
+		# Strips any leading spaces for value
 		$value =~ s/^\s+//g;
+
+		# Strips any trailing spaces for value
+		$value =~ s/\s+$//g;
 
 		# Defines a validation check
 		our $validated = 0;
 
-		# Concanate required and optional parameters
-		my @valid_parameters = (
-				    @{ $configuration{'required_parameters'} },
-				    @{ $configuration{'optional_parameters'} },
-				    @{ $configuration{'netscape_parameters'} }
-		);
+		foreach my $valid_parameters_group ( keys( %{ $configuration{'parameters'} } ) ) {
 
-		# For each valid parameter
-		foreach my $valid_parameter (@valid_parameters) {
+			# For each valid parameter
+			foreach my $valid_parameter ( @{ $configuration{'parameters'}->{$valid_parameters_group} } ) {
 
-			# if the valid parameter matches the parameter
-			if ( $valid_parameter eq $parameter ) {
+				# if the valid parameter matches the parameter
+				if ( $valid_parameter eq $parameter ) {
 
-			       # then use the value from the configuration file
-				$configuration{$valid_parameter} = $value;
+					# then use the value from the configuration file
+					$configuration{$valid_parameter} = $value;
 
-				# declare the parameter as validated
-				$validated = 1;
+					# declare the parameter as validated
+					$validated = 1;
 
-				# and go to next line
+					# and break the loop
+					last;
+				}
+			}
+
+			# if validated
+			if ( $validated eq "1" ) {
+
+				# then break loop
 				last;
 			}
 		}
@@ -193,11 +237,7 @@ sub read_configuration_file {
 		unless ( $validated eq "1" ) {
 
 			# then die
-			die 'The parameter, "'
-			  . $parameter . '"'
-			  . " used in "
-			  . $_[0]
-			  . " is unknown -- exitting!\n";
+			die 'The parameter, "' . $parameter . '"' . " used in " . $_[0] . " is unknown -- exitting!\n";
 		}
 
 	}
@@ -206,115 +246,90 @@ sub read_configuration_file {
 	close(CONFIG_FILE);
 
 	# For each required parameter
-	foreach
-	  my $required_parameter ( @{ $configuration{'required_parameters'} } )
-	{
+	foreach my $required_parameter ( @{ $configuration{'parameters'}->{'required'} } ) {
 
 		# if parameter is unset
 		if ( $configuration{$required_parameter} eq "" ) {
 
 			# then die
-			die $required_parameter
-			  . " haven't been defined -- exitting!\n";
+			die $required_parameter . " haven't been defined -- exitting!\n";
 		}
 	}
-	print "done\n";
 }
 
 sub checks {
 
-	print "Checks if files and directories exist: ";
+	print "Checks if files and directories exist:\n";
 
-       # if directory where cnf files are placed doens't exist, then create it'
-	unless ( -d $configuration{'ssldir'} . "/configs" ) {
-		mkdir("$configuration{'ssldir'}/configs")
-		  || die "FAILED\ncannot create, "
-		  . $configuration{'ssldir'}
-		  . "/configs: "
-		  . $! . "\n";
-	}
+	# if directory where cnf files are placed doens't exist, then create it'
+	&check_directory( $configuration{'ssldir'} . "/configs" );
 
-# if directory where generation scripts are placed doens't exist, then create it'
-	unless ( -d $configuration{'ssldir'} . "/scripts" ) {
-		mkdir("$configuration{'ssldir'}/scripts")
-		  || die "FAILED\ncannot create, "
-		  . $configuration{'ssldir'}
-		  . "/scripts: "
-		  . $! . "\n";
-	}
+	# if directory where generation scripts are placed doens't exist, then create it'
+	&check_directory( $configuration{'ssldir'} . "/scripts" );
 
 	# If the CA certificate was defined in the configuration file
-	if ( $configuration{'cacert'} ) {
+	&check_ca( "cacert", "cacert.pem", "CA certificate" );
+
+	# If the CA key was defined in the configuration file
+	&check_ca( "cakey", "private/cakey.pem", "CA key" );
+}
+
+sub check_directory {
+
+	# unless defined directory exist
+	unless ( -d $_[0] ) {
+
+		# then create
+		mkdir("$_[0]")
+		  || die "FAILED\ncannot create, " . $_[0] . ": " . $! . "\n";
+	}
+}
+
+sub check_ca {
+
+	# If the $_[0] was defined in the configuration file
+	if ( $configuration{ $_[0] } ) {
 
 		# then if file doesn't 'exist
-		unless ( -f $configuration{'cacert'} ) {
+		unless ( -f $configuration{ $_[0] } ) {
 
-			# then die
-			die "FAILED\nthe CA Certificate defined in "
+			# then print
+			die "FAILED\nthe "
+			  . $_[2]
+			  . " defined in "
 			  . $configuration{'file'} . ", "
-			  . $configuration{'cacert'}
+			  . $configuration{ $_[0] }
 			  . "doesn't exist -- exitting\n";
 		}
 	} else {
 
 		# otherwise check if it exist at the default location
-		if ( -f "$configuration{'ssldir'}/cacert.pem" ) {
+		if ( -f $configuration{'ssldir'} . "/" . $_[1] ) {
 
 			# then use the default location
-			$configuration{'cacert'} = "\$dir/cacert.pem";
+			$configuration{ $_[0] } = $configuration{'ssldir'} . "/" . $_[1];
 		} else {
 
 			# or die, saying that it can't find it
-			die
-"FAILED\ncan't find your CA Certificate, try defining it in the configurtion file, "
+			die "FAILED\ncan't find your "
+			  . $_[2]
+			  . " , try defining it in the configurtion file, "
 			  . $configuration{'file'}
 			  . " -- exitting\n";
 		}
 	}
-
-	# If the CA key was defined in the configuration file
-	if ( $configuration{'cakey'} ) {
-
-		# if file doesn't exist
-		unless ( -f $configuration{'cakey'} ) {
-
-			# then die
-			die "FAILED\nthe CA Key defined in "
-			  . $configuration{'file'} . ", "
-			  . $configuration{'cakey'}
-			  . "doesn't exist -- exitting\n";
-		}
-	} else {
-
-		# or check if it exist at the default location
-		if ( -f "$configuration{'ssldir'}/private/cakey.pem" ) {
-
-			# then use the default location
-			$configuration{'cakey'} = "\$dir/private/cakey.pem";
-		} else {
-
-			# or die, saying that it can't find it
-			die
-"FAILED\ncan't find your CA Certificate, try defining it in the configurtion file, "
-			  . $configuration{'file'}
-			  . " -- exitting \n ";
-		}
-	}
-	print "done\n";
 }
 
 sub make_cnf {
 
-	print "Generating OpenSSL configuration: ";
+	print "Generating OpenSSL configuration:\n";
 
 	# Open the .cnf file
-	open( CNF,
-	       " >$configuration{'ssldir'}/configs/$configuration{'fqdn'}.cnf"
-	  )
+	open( CNF, " >$configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf" )
 	  || die "FAILED\ncannot open file, "
 	  . $configuration{'ssldir'}
 	  . "/configs/"
-	  . $configuration{'fqdn'}
+	  . $configuration{'commonName'}
 	  . ".cnf: "
 	  . $! . "\n";
 
@@ -365,7 +380,7 @@ emailAddress            = optional
 [ req ]
 dir                     = $configuration{'ssldir'}
 default_bits            = 1024
-default_keyfile         = \$dir/private/$configuration{'fqdn'}-key.pem
+default_keyfile         = \$dir/private/$configuration{'commonName'}-key.pem
 distinguished_name      = req_distinguished_name
 attributes              = req_attributes
 x509_extensions = v3_ca # The extentions to add to the self signed cert
@@ -384,10 +399,10 @@ localityName_default            = $configuration{'locality'}
 organizationalUnitName          = Organizational Unit Name (eg, section)
 organizationalUnitName_default  = $configuration{'organizationalUnit'}
 commonName                      = Common Name (eg, YOUR name)
-commonName_default              = $configuration{'fqdn'}
+commonName_default              = $configuration{'commonName'}
 commonName_max                  = 64
 emailAddress                    = Email Address
-emailAddress_default            = root\@$configuration{'fqdn'}
+emailAddress_default            = root\@$configuration{'commonName'}
 emailAddress_max                = 64
 [ req_attributes ]
 challengePassword               = A challenge password
@@ -400,49 +415,41 @@ nsComment                       = "mkcert.pl generated certificate"
 subjectKeyIdentifier=hash
 authorityKeyIdentifier=keyid,issuer
 EOT
-	for
-	  my $netscape_parameter ( @{ $configuration{'netscape_parameters'} } )
-	{
-		if ( $configuration{$netscape_parameter} ) {
-			print CNF $netscape_parameter . " = "
-			  . $configuration{$netscape_parameter} . "\n";
+	for my $netscape_parameter ( @{ $configuration{'parameters'}->{'netscape'} } ) {
+		unless ( $configuration{$netscape_parameter} eq "" ) {
+			print CNF $netscape_parameter . " = " . $configuration{$netscape_parameter} . "\n";
 		}
 	}
 	if ( $configuration{'issuerAltName'} ) {
-		print CNF "issuerAltName = URI:"
-		  . $configuration{'issuerAltName'} . "\n";
+		print CNF "issuerAltName = URI:" . $configuration{'issuerAltName'} . "\n";
 	}
 	if ( $configuration{'crlDistributionPoints'} ) {
-		print CNF "crlDistributionPoints = URI:"
-		  . $configuration{'crlDistributionPoints'} . "\n";
+		print CNF "crlDistributionPoints = URI:" . $configuration{'crlDistributionPoints'} . "\n";
 	}
 
-	# If there were any CNAMES supplied
-	if ( $configuration{'cnames'} ) {
+	# If there were any subjectAltNames supplied
+	if ( $configuration{'subjectAltNames'} ) {
 
 		# then add the parameter
 		print CNF "subjectAltName = ";
 
-		# first count how many cnames are supplied
-		my $cname_totals = @{ $configuration{'cnames'} };
+		# first count how many subjectAltNames are supplied
+		my $subjectAltName_totals = @{ $configuration{'subjectAltNames'} };
 
 		# sets a counter
-		our $cname_count = 0;
+		our $subjectAltName_count = 0;
 
-		# until counter equals the amount of cnames
-		until ( $cname_count eq $cname_totals ) {
+		# until counter equals the amount of subjectAltNames
+		until ( $subjectAltName_count eq $subjectAltName_totals ) {
 
-			# add each cname to the parameter
-			print CNF "DNS:"
-			  . $configuration{'cnames'}->[$cname_count];
+			# add each subjectAltName to the parameter
+			print CNF $configuration{'subjectAltNames'}->[$subjectAltName_count];
 
 			# increase the counter
-			$cname_count++;
+			$subjectAltName_count++;
 
-			# unless there are no more cnames to be added
-			unless ( $configuration{'cnames'}->[$cname_count] eq
-				 "" )
-			{
+			# unless there are no more subjectAltNames to be added
+			unless ( $configuration{'subjectAltNames'}->[$subjectAltName_count] eq "" ) {
 
 				# add a comma to seperate them
 				print CNF ", ";
@@ -477,33 +484,30 @@ EOT
 	  || die "FAILED\ncannot close file, "
 	  . $configuration{'ssldir'}
 	  . "/configs/"
-	  . $configuration{'fqdn'}
+	  . $configuration{'commonName'}
 	  . ".cnf: "
 	  . $! . "\n";
-
-	print "done\n";
 }
 
 sub generate_script {
-	print "Generating script: ";
+	print "Generating script: \n";
 
 	# Get localtime
 	my $date = localtime();
 
 	# Open the certificate generation script
-	open( SCRIPT,
-	       ">$configuration{'ssldir'}/scripts/$configuration{'fqdn'}.sh" )
+	open( SCRIPT, ">$configuration{'ssldir'}/scripts/$configuration{'commonName'}.sh" )
 	  || die "FAILED\ncannot open file, "
 	  . $configuration{'ssldir'}
 	  . "/scripts/"
-	  . $configuration{'fqdn'} . ".sh"
+	  . $configuration{'commonName'} . ".sh"
 	  . $! . "\n";
 	print SCRIPT <<EOF;
 #!/bin/sh
 #
 # This script generates the CSR, CRT and KEY for the CommonName:
 #
-#	$configuration{'fqdn'}
+#	$configuration{'commonName'}
 #
 # And signs it with the CA key:
 #
@@ -525,19 +529,19 @@ UMASK=`umask`
 umask 0127
 
 # Generate certificate req and certificate private key
-openssl req -outform PEM -out $configuration{'ssldir'}/$configuration{'fqdn'}-req.pem -newkey rsa:1024 -nodes -config $configuration{'ssldir'}/configs/$configuration{'fqdn'}.cnf -batch
+openssl req -outform PEM -out $configuration{'ssldir'}/$configuration{'commonName'}-req.pem -newkey rsa:1024 -nodes -config $configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf -batch
 
 # Loosens the permissions on CSR
-chmod 0644 $configuration{'ssldir'}/$configuration{'fqdn'}-req.pem
+chmod 0644 $configuration{'ssldir'}/$configuration{'commonName'}-req.pem
 
 # Changes the group ownership of the private key
-chgrp ssl $configuration{'ssldir'}/private/$configuration{'fqdn'}-key.pem
+chgrp ssl $configuration{'ssldir'}/private/$configuration{'commonName'}-key.pem
 
 # Sets a looser umask
 umask 0122
 
 # Generate the certificate and signs it with the ca-key
-openssl ca -config $configuration{'ssldir'}/configs/$configuration{'fqdn'}.cnf -out $configuration{'ssldir'}/$configuration{'fqdn'}-cert.pem -policy policy_anything -batch -infiles $configuration{'ssldir'}/$configuration{'fqdn'}-req.pem
+openssl ca -config $configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf -out $configuration{'ssldir'}/$configuration{'commonName'}-cert.pem -policy policy_anything -batch -infiles $configuration{'ssldir'}/$configuration{'commonName'}-req.pem
 
 # Restores the old umask
 umask \${UMASK}
@@ -549,12 +553,9 @@ EOF
 	  || die "FAILED\ncannot close file, "
 	  . $configuration{'ssldir'}
 	  . "/scripts/"
-	  . $configuration{'fqdn'} . ".sh"
+	  . $configuration{'commonName'} . ".sh"
 	  . $! . "\n";
-	chmod( 0755,
-		"$configuration{'ssldir'}/scripts/$configuration{'fqdn'}.sh" );
-
-	print "done\n";
+	chmod( 0755, "$configuration{'ssldir'}/scripts/$configuration{'commonName'}.sh" );
 
 }
 
@@ -562,17 +563,8 @@ sub summary {
 
 	# this subrouting just prints a summary with the .cnf file and script
 	print "\n\nSUMMARY:\n\n";
-	print
-	  "OpenSSL configuration for this server certificate is saved as:\n";
-	print "\t"
-	  . $configuration{'ssldir'}
-	  . "/configs/"
-	  . $configuration{'fqdn'}
-	  . ".cnf\n\n";
+	print "OpenSSL configuration for this server certificate is saved as:\n";
+	print "\t" . $configuration{'ssldir'} . "/configs/" . $configuration{'commonName'} . ".cnf\n\n";
 	print "Script to generate certificate and key is saved as:\n";
-	print "\t"
-	  . $configuration{'ssldir'}
-	  . "/scripts/"
-	  . $configuration{'fqdn'}
-	  . ".sh\n\n";
+	print "\t" . $configuration{'ssldir'} . "/scripts/" . $configuration{'commonName'} . ".sh\n\n";
 }
