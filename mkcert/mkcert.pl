@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# $Id: mkcert.pl,v 1.4 2006-11-05 23:45:31 atterdag Exp $
+# $Id: mkcert.pl,v 1.5 2006-11-06 00:01:37 atterdag Exp $
 #
 # AUTHOR: Valdemar Lemche <valdemar@lemche.net>
 #
@@ -20,6 +20,12 @@
 # This will create in a certificate plus key.
 #
 # CHANGELOG:
+# mkcert.pl (0.3.1b) stable; urgency=low
+#
+#   * Created space between output lines in scripts
+#
+#  -- Valdemar Lemche <valdemar@lemche.net>  Mon, 6 Nov 2006 01:00 +0100
+#
 # mkcert.pl (0.3b) stable; urgency=low
 #
 #   * Added PEM to DER conversion to generation scripts
@@ -527,36 +533,47 @@ sub make_creation_script {
 #
 
 echo "Running $configuration{'ssldir'}/scripts/create-$configuration{'commonName'}.sh"
+echo
 
 echo "Recording the PWD you're at"
-pushd .
+pushd . > /dev/null
+echo
 
 echo "Going to your OpenSSL directory"
 cd "$configuration{'ssldir'}"
+echo
 
 echo "Recording your old umask"
 UMASK=`umask`
+echo
 
 echo "Setting a new strict umask"
 umask 0127
+echo
 
 echo "Generate certificate req and certificate private key"
 openssl req -outform PEM -out "$configuration{'ssldir'}/$configuration{'commonName'}-req.pem" -newkey rsa:1024 -nodes -config "$configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf" -batch
+echo
 
 echo "Loosens the permissions on CSR"
 chmod 0644 "$configuration{'ssldir'}/$configuration{'commonName'}-req.pem"
+echo
 
 echo "Changes the group ownership of the private key"
 chgrp ssl "$configuration{'ssldir'}/private/$configuration{'commonName'}-key.pem"
+echo
 
 echo "Restores the old umask"
 umask \${UMASK}
+echo
 
 echo "Return to old PWD"
-popd
+popd > /dev/null
+echo
 
 echo "Running the signing script"
 . "$configuration{'ssldir'}/scripts/sign-$configuration{'commonName'}.sh"
+echo
 EOF
 	close(SCRIPT)
 	  || die "FAILED\ncannot close file, "
@@ -600,36 +617,47 @@ sub make_signing_script {
 #
 
 echo "Running $configuration{'ssldir'}/scripts/sign-$configuration{'commonName'}.sh"
+echo
 
 echo "Recording the PWD you're at"
-pushd .
+pushd . > /dev/null
+echo
 
 echo "Going to your OpenSSL directory"
 cd "$configuration{'ssldir'}"
+echo
 
 echo "Recording your old umask"
 UMASK=`umask`
+echo
 
 echo "Sets a looser umask"
 umask 0122
+echo
 
 echo "Generate the certificate and signs it with the ca-key"
 openssl ca -config "$configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf" -out "$configuration{'ssldir'}/$configuration{'commonName'}-cert.pem" -policy policy_anything -batch -infiles "$configuration{'ssldir'}/$configuration{'commonName'}-req.pem"
+echo
 
 echo "Create DER formatted certificate from the PEM formatted certificate"
 openssl x509 -in "$configuration{'ssldir'}/$configuration{'commonName'}-cert.pem" -out "$configuration{'ssldir'}/$configuration{'commonName'}-cert.der" -outform DER
+echo
 
 echo "Setting a more scrict umask"
 umask 0120
+echo
 
 echo "Creating PKCS12 formatted certificate from the PEM formatted certificate and PEM formmated key"
 openssl pkcs12 -export -in "$configuration{'ssldir'}/$configuration{'commonName'}-cert.pem" -inkey "$configuration{'ssldir'}/private/$configuration{'commonName'}-key.pem" -out "$configuration{'ssldir'}/$configuration{'commonName'}-cert.p12" -name "$configuration{'commonName'}"
+echo
 
 echo "Restores the old umask"
 umask \${UMASK}
+echo
 
 echo "Return to old PWD"
-popd
+popd > /dev/null
+echo
 EOF
 	close(SCRIPT)
 	  || die "FAILED\ncannot close file, "
@@ -665,20 +693,28 @@ sub make_revokation_script {
 #
 
 echo "Running $configuration{'ssldir'}/scripts/revoke-$configuration{'commonName'}.sh"
+echo
+
 echo "Recording the PWD you're at"
-pushd .
+pushd . > /dev/null
+echo
 
 echo "Going to your OpenSSL directory"
 cd "$configuration{'ssldir'}"
+echo
 
 echo "Revokes the script at update key database"
 openssl ca -config "$configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf" -revoke "$configuration{'ssldir'}/$configuration{'commonName'}-cert.pem"
+echo
 
 echo "Generate/updates certificate revokation list"
 openssl ca -config "$configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf" -gencrl -out "$configuration{'ssldir'}/crl/ca.crl"
+echo
 
 echo "Returning to old PWD"
-popd
+popd > /dev/null
+echo
+
 EOF
 	close(SCRIPT)
 	  || die "FAILED\ncannot close file, "
@@ -714,21 +750,28 @@ sub make_renewal_script {
 #
 
 echo "Running $configuration{'ssldir'}/scripts/renew-$configuration{'commonName'}.sh"
+echo
 
 echo "Record the PWD you're at"
-pushd .
+pushd . > /dev/null
+echo
 
 echo "Going to your OpenSSL directory"
 cd "$configuration{'ssldir'}"
+echo
 
 echo "Calls the revokation script to revoke old certificate"
 . "$configuration{'ssldir'}/scripts/revoke-$configuration{'commonName'}.sh"
+echo
 
 echo "Calls the signing script to generate a new signed certificate from the CSR"
 . "$configuration{'ssldir'}/scripts/sign-$configuration{'commonName'}.sh"
+echo
 
 echo "Return to old PWD"
-popd
+popd > /dev/null
+echo
+
 EOF
 	close(SCRIPT)
 	  || die "FAILED\ncannot close file, "
