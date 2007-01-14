@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# $Id: mkcert.pl,v 1.5 2006-11-06 00:01:37 atterdag Exp $
+# $Id: mkcert.pl,v 1.6 2007-01-14 13:33:59 atterdag Exp $
 #
 # AUTHOR: Valdemar Lemche <valdemar@lemche.net>
 #
@@ -20,9 +20,16 @@
 # This will create in a certificate plus key.
 #
 # CHANGELOG:
+# mkcert.pl (0.3.1c) stable; urgency=low
+#
+#   * Fixed bug. If no subjectAltName is defined, then the configuration file
+#     contained the parameter, but without values.
+#
+#  -- Valdemar Lemche <valdemar@lemche.net>  Sun, 14 Jan 2007 14:33 +0100
+#
 # mkcert.pl (0.3.1b) stable; urgency=low
 #
-#   * Created space between output lines in scripts
+#   * Created space between output lines in scripts to give a clearer output
 #
 #  -- Valdemar Lemche <valdemar@lemche.net>  Mon, 6 Nov 2006 01:00 +0100
 #
@@ -116,7 +123,7 @@ sub validate_options {
 	# If commonName have not been defined then die
 	die $syntax . "\n\tcommonName have not been set -- exitting!\n\n" if !( $configuration{'commonName'} );
 
-	# If commonName have been defined but subjectAltNamethen die
+	# If subjectAltName have been defined but doesn't have the right syntax then die
 	foreach my $subjectAltName ( @{ $configuration{'subjectAltNames'} } ) {
 		unless (    ( $subjectAltName =~ /^email:/ )
 			 || ( $subjectAltName =~ /^URI:/ )
@@ -448,7 +455,7 @@ EOT
 	}
 
 	# If there were any subjectAltNames supplied
-	if ( $configuration{'subjectAltNames'} ) {
+	if ( $configuration{'subjectAltNames'}->[0] ) {
 
 		# then add the parameter
 		print CNF "subjectAltName = ";
@@ -802,7 +809,7 @@ sub summary {
 sub run_scripts {
 
 	# Should we just run the generation script now?
-	print "Run creation script now (this also signs the CSR)? [yes]: ";
+	print "Run creation script now? (this will also sign the CSR) [yes]: ";
 
 	# Read input from STDIN
 	my $answer = <STDIN>;
