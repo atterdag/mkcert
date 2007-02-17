@@ -1,0 +1,41 @@
+mkcert.pl (0.3.1d) stable; urgency=low
+
+  * Updated help text and splitted header in script into several files.
+
+ -- Valdemar Lemche <valdemar@lemche.net>  Sun, 17 Feb 2007 11:47 +0100
+
+mkcert.pl (0.3.1c) stable; urgency=low
+
+  * Fixed bug. If no subjectAltName is defined, then the configuration file
+    contained the parameter, but without values.
+
+ -- Valdemar Lemche <valdemar@lemche.net>  Sun, 14 Jan 2007 14:33 +0100
+
+mkcert.pl (0.3.1b) stable; urgency=low
+
+  * Created space between output lines in scripts to give a clearer output
+
+ -- Valdemar Lemche <valdemar@lemche.net>  Mon, 6 Nov 2006 01:00 +0100
+
+mkcert.pl (0.3b) stable; urgency=low
+
+  * Added PEM to DER conversion to generation scripts
+  * Generate Renewal script
+  * Generate Revokation script
+
+ -- Valdemar Lemche <valdemar@lemche.net>  Mon, 6 Nov 2006 00:44 +0100
+
+mkcert.pl (0.2b) stable; urgency=low
+
+  * Changed fqdn switch to commonName
+  * Changed cname switch to subjectAltName
+  * Optimized sanity check code
+  * Added syntax checking of subjectAltName values
+
+ -- Valdemar Lemche <valdemar@lemche.net>  Sun, 5 Nov 2006 16:21 +0100
+
+mkcert.pl (0.1b) stable; urgency=low
+
+  * Initial release
+
+ -- Valdemar Lemche <valdemar@lemche.net>  Mon, 21 Oct 2006 10:50 +0100

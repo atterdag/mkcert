@@ -1,70 +1,16 @@
 #!/usr/bin/perl
 #
-# $Id: mkcert.pl,v 1.6 2007-01-14 13:33:59 atterdag Exp $
+# $Id: mkcert.pl,v 1.7 2007-02-17 10:53:36 atterdag Exp $
 #
 # AUTHOR: Valdemar Lemche <valdemar@lemche.net>
 #
-# VERSION: 0.1b stable
+# VERSION: 0.3.1d
 #
-# PURPOSE: Easily generate server certificate and key.
-#
-# USAGE:
-# Set up a CA certificate (with key). If you don't know how to, then please
-# refer to http://valdemar.lemche.net/documents/openssl/certificates on how to.
-#
-# Edit ./mkcert.cfg (the parameters is described in the file), and run the
-# command:
-#
-#       # ./mkcert.pl -commonName <commonName> [-subjectAltName <subjectAltName> [-subjectAltName <subjectAltName>]]
-#
-# This will create in a certificate plus key.
-#
-# CHANGELOG:
-# mkcert.pl (0.3.1c) stable; urgency=low
-#
-#   * Fixed bug. If no subjectAltName is defined, then the configuration file
-#     contained the parameter, but without values.
-#
-#  -- Valdemar Lemche <valdemar@lemche.net>  Sun, 14 Jan 2007 14:33 +0100
-#
-# mkcert.pl (0.3.1b) stable; urgency=low
-#
-#   * Created space between output lines in scripts to give a clearer output
-#
-#  -- Valdemar Lemche <valdemar@lemche.net>  Mon, 6 Nov 2006 01:00 +0100
-#
-# mkcert.pl (0.3b) stable; urgency=low
-#
-#   * Added PEM to DER conversion to generation scripts
-#   * Generate Renewal script
-#   * Generate Revokation script
-#
-#  -- Valdemar Lemche <valdemar@lemche.net>  Mon, 6 Nov 2006 00:44 +0100
-#
-# mkcert.pl (0.2b) stable; urgency=low
-#
-#   * Changed fqdn switch to commonName
-#   * Changed cname switch to subjectAltName
-#   * Optimized sanity check code
-#   * Added syntax checking of subjectAltName values
-#
-#  -- Valdemar Lemche <valdemar@lemche.net>  Sun, 5 Nov 2006 16:21 +0100
-#
-# mkcert.pl (0.1b) stable; urgency=low
-#
-#   * Initial release
-#
-#  -- Valdemar Lemche <valdemar@lemche.net>  Mon, 21 Oct 2006 10:50 +0100
+# PURPOSE: Generates scripts to easily create and manage certificates and keys.
 #
 # Get the latest version from http://valdemar.lemche.net
 #
-# mkcert.pl is Copyright (C) 2006 Valdemar Lemche.  All rights reserved.
-# This script is free software; you can redistribute it and/or modify it
-# under the same terms as Perl itself.
-#
-# This script is released TOTALLY AS-IS. If it will have any negative impact
-# on your systems, make you sleepless at night or even cause of World War III;
-# I will claim no responsibility! You may use this script at you OWN risk.
+# COPYRIGHT: See the copyright file distributed with this script.
 #
 
 # Strict memory usage is always a good thing
