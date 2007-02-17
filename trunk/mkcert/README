@@ -35,8 +35,8 @@ And the following scripts:
       /etc/ssl/scripts/renew-mailstore.se.lemche.net.sh
 
 
-The script create-mailstore.se.lemche.net.sh will create the key and certifying
-request (CSR) as:
+The script create-mailstore.se.lemche.net.sh will create the Certificate Key
+and Certificate Signing Request (CSR) as:
 
       /etc/ssl/private/mailstore.se.lemche.net-key.pem
       /etc/ssl/mailstore.se.lemche.net-req.pem
