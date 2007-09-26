@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# $Id: mkcert.pl,v 1.7 2007-02-17 10:53:36 atterdag Exp $
+# $Id: mkcert.pl,v 1.8 2007-09-26 22:54:43 atterdag Exp $
 #
 # AUTHOR: Valdemar Lemche <valdemar@lemche.net>
 #
@@ -24,9 +24,10 @@ our (%configuration);
 
 # Get the options from the command line
 GetOptions(
-	    'subjectAltName=s' => \@{ $configuration{'subjectAltNames'} },
-	    'commonName=s'     => \$configuration{'commonName'},
-	    'conf=s'           => \$configuration{'file'}
+			'nsCertType=s'     => \@{ $configuration{'nsCertType'} },
+			'subjectAltName=s' => \@{ $configuration{'subjectAltNames'} },
+			'commonName=s'     => \$configuration{'commonName'},
+			'conf=s'           => \$configuration{'file'}
 );
 
 # Valid options supplied with script
@@ -64,34 +65,56 @@ sub validate_options {
 	print "Validating options ...\n";
 
 	my $syntax =
-"Usage: mkcert -commonName <commonName> [-subjectAltName <subjectAltName> [-subjectAltName <subjectAltName>]] [-conf <configuration-file>]\n";
+"Usage: mkcert -commonName <commonName> [-nsCertType <server> [-nsCertType = <type>]] [-subjectAltName <subjectAltName> [-subjectAltName <subjectAltName>]] [-conf <configuration-file>]\n";
 
 	# If commonName have not been defined then die
-	die $syntax . "\n\tcommonName have not been set -- exitting!\n\n" if !( $configuration{'commonName'} );
+	die $syntax . "\n\tcommonName have not been set -- exitting!\n\n"
+	  if !( $configuration{'commonName'} );
 
-	# If subjectAltName have been defined but doesn't have the right syntax then die
-	foreach my $subjectAltName ( @{ $configuration{'subjectAltNames'} } ) {
-		unless (    ( $subjectAltName =~ /^email:/ )
-			 || ( $subjectAltName =~ /^URI:/ )
-			 || ( $subjectAltName =~ /^DNS:/ )
-			 || ( $subjectAltName =~ /^RID:/ )
-			 || ( $subjectAltName =~ /^IP:/ )
-			 || ( $subjectAltName =~ /^dirName:/ )
-			 || ( $subjectAltName =~ /^otherName:/ ) )
+	# If nsCertType have been defined but doesn't have the right syntax then die
+	foreach my $nsCertType ( @{ $configuration{'nsCertType'} } ) {
+		unless (    ( $nsCertType eq 'server' )
+				 || ( $nsCertType eq 'client' )
+				 || ( $nsCertType eq 'email' )
+				 || ( $nsCertType eq 'objsign' ) )
 		{
 			die $syntax . "
-		subjectAltName can be the following:
 
-			email: <an email address>
-			URI: <a uniform resource indicator>
-			DNS: <a DNS domain name>
-			RID: <a registered ID: OBJECT IDENTIFIER>
-			IP: <an IP address>
-			dirName: <a distinguished name>
-			otherName: <otherName can include arbitrary data associated
-			           with an OID: the value should be the OID followed
-			           by a semicolon and the content in standard
-			           ASN1_generate_nconf() format.
+                nsCertType can be the following:
+
+                        server:  A typical server certificate
+                        client:  A typical client certificate
+                        email:   Allowed to sign an email
+                        objsign: Allowed to sign other objects
+
+";
+		}
+	}
+
+# If subjectAltName have been defined but doesn't have the right syntax then die
+	foreach my $subjectAltName ( @{ $configuration{'subjectAltNames'} } ) {
+		unless (    ( $subjectAltName =~ /^email:/ )
+				 || ( $subjectAltName =~ /^URI:/ )
+				 || ( $subjectAltName =~ /^DNS:/ )
+				 || ( $subjectAltName =~ /^RID:/ )
+				 || ( $subjectAltName =~ /^IP:/ )
+				 || ( $subjectAltName =~ /^dirName:/ )
+				 || ( $subjectAltName =~ /^otherName:/ ) )
+		{
+			die $syntax . "
+
+                subjectAltName can be the following:
+
+                        email:     <an email address>
+                        URI:       <a uniform resource indicator>
+                        DNS:       <a DNS domain name>
+                        RID:       <a registered ID: OBJECT IDENTIFIER>
+                        IP:        <an IP address>
+                        dirName:   <a distinguished name>
+                        otherName: <otherName can include arbitrary data associated
+                                   with an OID: the value should be the OID followed
+                                   by a semicolon and the content in standard
+                                   ASN1_generate_nconf() format.
 
 ";
 		}
@@ -152,11 +175,11 @@ sub read_configuration_file {
 		# contains only spaces
 		# or tabs,
 		# or is a an empty line
-		if (     $line =~ /^#/
-		      || $line =~ /^\s+$/
-		      || $line =~ /^\s+$/
-		      || $line =~ /^\t+$/
-		      || $line =~ /^$/ )
+		if (    $line =~ /^#/
+			 || $line =~ /^\s+$/
+			 || $line =~ /^\s+$/
+			 || $line =~ /^\t+$/
+			 || $line =~ /^$/ )
 		{
 
 			# then goto to next line
@@ -179,10 +202,14 @@ sub read_configuration_file {
 		our $validated = 0;
 
 		# iterate over parameter groups
-		foreach my $valid_parameters_group ( keys( %{ $configuration{'parameters'} } ) ) {
+		foreach my $valid_parameters_group (
+									 keys( %{ $configuration{'parameters'} } ) )
+		{
 
 			# For each valid parameter
-			foreach my $valid_parameter ( @{ $configuration{'parameters'}->{$valid_parameters_group} } ) {
+			foreach my $valid_parameter (
+				  @{ $configuration{'parameters'}->{$valid_parameters_group} } )
+			{
 
 				# if the valid parameter matches the parameter
 				if ( $valid_parameter eq $parameter ) {
@@ -210,7 +237,11 @@ sub read_configuration_file {
 		unless ( $validated eq "1" ) {
 
 			# then die
-			die 'The parameter, "' . $parameter . '"' . " used in " . $_[0] . " is unknown -- exitting!\n";
+			die 'The parameter, "'
+			  . $parameter . '"'
+			  . " used in "
+			  . $_[0]
+			  . " is unknown -- exitting!\n";
 		}
 
 	}
@@ -219,7 +250,9 @@ sub read_configuration_file {
 	close(CONFIG_FILE);
 
 	# For each required parameter
-	foreach my $required_parameter ( @{ $configuration{'parameters'}->{'required'} } ) {
+	foreach
+	  my $required_parameter ( @{ $configuration{'parameters'}->{'required'} } )
+	{
 
 		# if parameter is unset
 		if ( $configuration{$required_parameter} eq "" ) {
@@ -237,7 +270,7 @@ sub sanity_checks {
 	# if directory where cnf files are placed doens't exist, then create it'
 	&check_directory( $configuration{'ssldir'} . "/configs" );
 
-	# if directory where generation scripts are placed doens't exist, then create it'
+# if directory where generation scripts are placed doens't exist, then create it'
 	&check_directory( $configuration{'ssldir'} . "/scripts" );
 
 	# If the CA certificate was defined in the configuration file
@@ -298,7 +331,8 @@ sub make_openssl_cnf {
 	print "Generating OpenSSL configuration ...\n";
 
 	# Open the .cnf file
-	open( CNF, " >$configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf" )
+	open( CNF,
+		 " >$configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf" )
 	  || die "FAILED\ncannot open file, "
 	  . $configuration{'ssldir'}
 	  . "/configs/"
@@ -384,20 +418,44 @@ challengePassword_max           = 20
 unstructuredName                = An optional company name
 [ usr_cert ]
 basicConstraints=CA:FALSE
-nsComment                       = "mkcert.pl generated certificate"
-subjectKeyIdentifier=hash
-authorityKeyIdentifier=keyid,issuer
 EOT
-	for my $netscape_parameter ( @{ $configuration{'parameters'}->{'netscape'} } ) {
+
+	# define the nsCertType if requested
+	unless ( $configuration{'nsCertType'} eq "" ) {
+		print CNF 'nsCertType                      = ';
+		our ($nsCertType_left);
+		until ( $nsCertType_left eq 0 ) {
+			my $nsCertType = shift( @{ $configuration{'nsCertType'} } );
+			print CNF $nsCertType;
+			$nsCertType_left = @{ $configuration{'nsCertType'} };
+			unless ( $nsCertType_left eq 0 ) {
+				print CNF ", ";
+			}
+		}
+		print CNF "\n";
+	}
+
+	# Print a little more standard stuff
+	print CNF <<EOT;
+nsComment                       = "mkcert.pl generated certificate"
+subjectKeyIdentifier            = hash
+authorityKeyIdentifier          = keyid,issuer
+EOT
+	for
+	  my $netscape_parameter ( @{ $configuration{'parameters'}->{'netscape'} } )
+	{
 		unless ( $configuration{$netscape_parameter} eq "" ) {
-			print CNF $netscape_parameter . " = " . $configuration{$netscape_parameter} . "\n";
+			print CNF $netscape_parameter . " = "
+			  . $configuration{$netscape_parameter} . "\n";
 		}
 	}
 	if ( $configuration{'issuerAltName'} ) {
-		print CNF "issuerAltName = URI:" . $configuration{'issuerAltName'} . "\n";
+		print CNF "issuerAltName = URI:"
+		  . $configuration{'issuerAltName'} . "\n";
 	}
 	if ( $configuration{'crlDistributionPoints'} ) {
-		print CNF "crlDistributionPoints = URI:" . $configuration{'crlDistributionPoints'} . "\n";
+		print CNF "crlDistributionPoints = URI:"
+		  . $configuration{'crlDistributionPoints'} . "\n";
 	}
 
 	# If there were any subjectAltNames supplied
@@ -416,13 +474,17 @@ EOT
 		until ( $subjectAltName_count eq $subjectAltName_totals ) {
 
 			# add each subjectAltName to the parameter
-			print CNF $configuration{'subjectAltNames'}->[$subjectAltName_count];
+			print CNF $configuration{'subjectAltNames'}
+			  ->[$subjectAltName_count];
 
 			# increase the counter
 			$subjectAltName_count++;
 
 			# unless there are no more subjectAltNames to be added
-			unless ( $configuration{'subjectAltNames'}->[$subjectAltName_count] eq "" ) {
+			unless (
+				   $configuration{'subjectAltNames'}->[$subjectAltName_count] eq
+				   "" )
+			{
 
 				# add a comma to seperate them
 				print CNF ", ";
@@ -469,7 +531,9 @@ sub make_creation_script {
 	my $date = localtime();
 
 	# Open the certificate generation script
-	open( SCRIPT, ">$configuration{'ssldir'}/scripts/create-$configuration{'commonName'}.sh" )
+	open( SCRIPT,
+">$configuration{'ssldir'}/scripts/create-$configuration{'commonName'}.sh"
+	  )
 	  || die "FAILED\ncannot open file, "
 	  . $configuration{'ssldir'}
 	  . "/scripts/create-"
@@ -480,7 +544,7 @@ sub make_creation_script {
 #
 # This script generates the CSR and KEY for the CommonName:
 #
-#	$configuration{'commonName'}
+#       $configuration{'commonName'}
 #
 # This script was generated by mkcert.pl at $date
 #
@@ -534,7 +598,9 @@ EOF
 	  . "/scripts/create-"
 	  . $configuration{'commonName'} . ".sh"
 	  . $! . "\n";
-	chmod( 0755, "$configuration{'ssldir'}/scripts/create-$configuration{'commonName'}.sh" );
+	chmod( 0755,
+"$configuration{'ssldir'}/scripts/create-$configuration{'commonName'}.sh"
+	);
 
 }
 
@@ -545,7 +611,9 @@ sub make_signing_script {
 	my $date = localtime();
 
 	# Open the signing script
-	open( SCRIPT, ">$configuration{'ssldir'}/scripts/sign-$configuration{'commonName'}.sh" )
+	open( SCRIPT,
+		">$configuration{'ssldir'}/scripts/sign-$configuration{'commonName'}.sh"
+	  )
 	  || die "FAILED\ncannot open file, "
 	  . $configuration{'ssldir'}
 	  . "/scripts/sign-"
@@ -556,15 +624,15 @@ sub make_signing_script {
 #
 # This script sign the CSR for the CommonName:
 #
-#	$configuration{'commonName'}
+#       $configuration{'commonName'}
 #
 # With the CA key:
 #
-#	$configuration{'cakey'}
+#       $configuration{'cakey'}
 #
 # Which creates the certificate:
 #
-#	$configuration{'ssldir'}/$configuration{'commonName'}-cert.pem
+#       $configuration{'ssldir'}/$configuration{'commonName'}-cert.pem
 #
 # This script was generated by mkcert.pl at $date
 #
@@ -618,7 +686,9 @@ EOF
 	  . "/scripts/sign-"
 	  . $configuration{'commonName'} . ".sh"
 	  . $! . "\n";
-	chmod( 0755, "$configuration{'ssldir'}/scripts/sign-$configuration{'commonName'}.sh" );
+	chmod( 0755,
+"$configuration{'ssldir'}/scripts/sign-$configuration{'commonName'}.sh"
+	);
 
 }
 
@@ -629,7 +699,9 @@ sub make_revokation_script {
 	my $date = localtime();
 
 	# Open the certificate revokation script
-	open( SCRIPT, ">$configuration{'ssldir'}/scripts/revoke-$configuration{'commonName'}.sh" )
+	open( SCRIPT,
+">$configuration{'ssldir'}/scripts/revoke-$configuration{'commonName'}.sh"
+	  )
 	  || die "FAILED\ncannot open file, "
 	  . $configuration{'ssldir'}
 	  . "/scripts/revoke-"
@@ -640,7 +712,7 @@ sub make_revokation_script {
 #
 # This script revokes the certificate with the CommonName:
 #
-#	$configuration{'commonName'}
+#       $configuration{'commonName'}
 #
 # This script was generated by mkcert.pl at $date
 #
@@ -675,7 +747,9 @@ EOF
 	  . "/scripts/revoke-"
 	  . $configuration{'commonName'} . ".sh"
 	  . $! . "\n";
-	chmod( 0755, "$configuration{'ssldir'}/scripts/revoke-$configuration{'commonName'}.sh" );
+	chmod( 0755,
+"$configuration{'ssldir'}/scripts/revoke-$configuration{'commonName'}.sh"
+	);
 
 }
 
@@ -686,7 +760,9 @@ sub make_renewal_script {
 	my $date = localtime();
 
 	# Open the certificate renewal script
-	open( SCRIPT, ">$configuration{'ssldir'}/scripts/renew-$configuration{'commonName'}.sh" )
+	open( SCRIPT,
+">$configuration{'ssldir'}/scripts/renew-$configuration{'commonName'}.sh"
+	  )
 	  || die "FAILED\ncannot open file, "
 	  . $configuration{'ssldir'}
 	  . "/scripts/renew-"
@@ -697,7 +773,7 @@ sub make_renewal_script {
 #
 # This script renews the certificate with the CommonName:
 #
-#	$configuration{'commonName'}
+#       $configuration{'commonName'}
 #
 # This script was generated by mkcert.pl at $date
 #
@@ -732,7 +808,9 @@ EOF
 	  . "/scripts/renew-"
 	  . $configuration{'commonName'} . ".sh"
 	  . $! . "\n";
-	chmod( 0755, "$configuration{'ssldir'}/scripts/renew-$configuration{'commonName'}.sh" );
+	chmod( 0755,
+"$configuration{'ssldir'}/scripts/renew-$configuration{'commonName'}.sh"
+	);
 
 }
 
@@ -741,15 +819,36 @@ sub summary {
 	# this subrouting just prints a summary with the .cnf file and script
 	print "\n\nSUMMARY:\n\n";
 	print "OpenSSL configuration for this server certificate is saved as:\n";
-	print "\t" . $configuration{'ssldir'} . "/configs/" . $configuration{'commonName'} . ".cnf\n\n";
+	print "\t"
+	  . $configuration{'ssldir'}
+	  . "/configs/"
+	  . $configuration{'commonName'}
+	  . ".cnf\n\n";
 	print "Script to generate certificate request and key is saved as:\n";
-	print "\t" . $configuration{'ssldir'} . "/scripts/create-" . $configuration{'commonName'} . ".sh\n\n";
-	print "Script to sign certificate request and generate signed certificate is saved as:\n";
-	print "\t" . $configuration{'ssldir'} . "/scripts/sign-" . $configuration{'commonName'} . ".sh\n\n";
+	print "\t"
+	  . $configuration{'ssldir'}
+	  . "/scripts/create-"
+	  . $configuration{'commonName'}
+	  . ".sh\n\n";
+	print
+"Script to sign certificate request and generate signed certificate is saved as:\n";
+	print "\t"
+	  . $configuration{'ssldir'}
+	  . "/scripts/sign-"
+	  . $configuration{'commonName'}
+	  . ".sh\n\n";
 	print "Script to renew a certificate is saved as:\n";
-	print "\t" . $configuration{'ssldir'} . "/scripts/renew-" . $configuration{'commonName'} . ".sh\n\n";
+	print "\t"
+	  . $configuration{'ssldir'}
+	  . "/scripts/renew-"
+	  . $configuration{'commonName'}
+	  . ".sh\n\n";
 	print "Script to revoke a certificate is saved as:\n";
-	print "\t" . $configuration{'ssldir'} . "/scripts/revoke-" . $configuration{'commonName'} . ".sh\n\n";
+	print "\t"
+	  . $configuration{'ssldir'}
+	  . "/scripts/revoke-"
+	  . $configuration{'commonName'}
+	  . ".sh\n\n";
 }
 
 sub run_scripts {
@@ -764,10 +863,11 @@ sub run_scripts {
 	chomp($answer);
 
 	# If input equals something with yes or just [ENTER]
-	if ( $answer eq "yes" || $answer eq "y" || $answer eq "Y" || $answer eq "" ) {
+	if ( $answer eq "yes" || $answer eq "y" || $answer eq "Y" || $answer eq "" )
+	{
 
 		# then run the script
-		system("\"$configuration{'ssldir'}/scripts/create-$configuration{'commonName'}.sh\"");
+		system(   "\"$configuration{'ssldir'}/scripts/create-$configuration{'commonName'}.sh\""
+		);
 	}
 }
-
