@@ -1,4 +1,3 @@
 # $Id:$
 
-* Add switch to either generate Server Certificate or Personal Certificate
 * Set bit size in configuration file and at command line.
