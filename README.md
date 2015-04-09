@@ -2,21 +2,22 @@
 
 Just download the latest version from [my blog] (http://valdemar.lemche.net/2012/06/mkcertpl.html), and extract the tarball somewhere.<br>
 ##Usage##
-
 Set up a CA certificate (with key). If you don’t know how to, then please refer to, [howto create you own CA and server certificate] (http://valdemar.lemche.net/2012/06/mini-howto-create-you-own-ca-and-server.html?page_id=16), on how to.<br>
-Edit '''./mkcert.cfg''' (the parameters is described in the file), and run the command:<br>
+Edit <code>./mkcert.cfg</code> (the parameters is described in the file), and run the command:<br>
 <pre># ./mkcert.pl -commonName <commonName>
 [-subjectAltName <subjectAltName>]
 [-subjectAltName <subjectAltName>]</pre>
-
 For example:<br>
-<pre>      # ./mkcert.pl -commonName mailstore.se.lemche.net \<br>
--subjectAltName DNS:pop.se.lemche.net \<br>
--subjectAltName DNS:imap.se.lemche.net<br>
-</pre>
-
-This will create the configuration file:<br>  '''/etc/ssl/configs/mailstore.se.lemche.net.cnf'''<br>
-And the following scripts:<br>  '''/etc/ssl/scripts/create-mailstore.se.lemche.net.sh'''<br> '''/etc/ssl/scripts/sign-mailstore.se.lemche.net.sh'''<br> '''/etc/ssl/scripts/revoke-mailstore.se.lemche.net.sh'''<br> '''/etc/ssl/scripts/renew-mailstore.se.lemche.net.sh'''<br>
+<pre># ./mkcert.pl -commonName mailstore.se.lemche.net
+-subjectAltName DNS:pop.se.lemche.net
+-subjectAltName DNS:imap.se.lemche.net</pre>
+This will create the configuration file:<br>
+* **/etc/ssl/configs/mailstore.se.lemche.net.cnf**<br>
+And the following scripts:<br>
+* **/etc/ssl/scripts/create-mailstore.se.lemche.net.sh**<br>
+* **/etc/ssl/scripts/sign-mailstore.se.lemche.net.sh**<br>
+* **/etc/ssl/scripts/revoke-mailstore.se.lemche.net.sh**<br>
+* **/etc/ssl/scripts/renew-mailstore.se.lemche.net.sh**<br>
 The script create-mailstore.se.lemche.net.sh will create the ''Certificate Key'' and ''Certificate Signing Request (CSR)'' as:<br>  '''/etc/ssl/private/mailstore.se.lemche.net-key.pem'''<br> '''/etc/ssl/mailstore.se.lemche.net-req.pem'''<br>
 The create script will also call the script sign-mailstore.se.lemche.net.sh.<br>
 <blockquote>This will sign the CSR and create a PEM formattet certificate, convert<br>
