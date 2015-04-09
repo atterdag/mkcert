@@ -7,7 +7,6 @@ Edit **./mkcert.cfg** (the parameters is described in the file), and run the com
 <pre># ./mkcert.pl -commonName <commonName>
 [-subjectAltName <subjectAltName>]
 [-subjectAltName <subjectAltName>]</pre>
-
 For example:<br>
 <pre># ./mkcert.pl -commonName mailstore.se.lemche.net
 -subjectAltName DNS:pop.se.lemche.net
@@ -15,7 +14,6 @@ For example:<br>
 
 This will create the configuration file:<br>
 * **/etc/ssl/configs/mailstore.se.lemche.net.cnf**<br>
-
 And the following scripts:<br>
 * **/etc/ssl/scripts/create-mailstore.se.lemche.net.sh**<br>
 * **/etc/ssl/scripts/sign-mailstore.se.lemche.net.sh**<br>
