@@ -1,14 +1,13 @@
-## Installation ##
+#Installation#
 
-Just download the latest version from the [[section](files.md)], and extract the tarball somewhere.<br>
-<h2>Usage</h2>
+Just download the latest version from [my blog] (http://valdemar.lemche.net/2012/06/mkcertpl.html), and extract the tarball somewhere.<br>
+##Usage##
 
-Set up a CA certificate (with key). If you don’t know how to, then please refer to, [<a href='Mini.md'>howto create you own CA and server certificate</a>], on how to.<br>
+Set up a CA certificate (with key). If you don’t know how to, then please refer to, [howto create you own CA and server certificate] (http://valdemar.lemche.net/2012/06/mini-howto-create-you-own-ca-and-server.html?page_id=16), on how to.<br>
 Edit '''./mkcert.cfg''' (the parameters is described in the file), and run the command:<br>
-<pre>      # ./mkcert.pl -commonName <commonName> \<br>
-[-subjectAltName <subjectAltName>] \<br>
-[-subjectAltName <subjectAltName>]<br>
-</pre>
+<pre># ./mkcert.pl -commonName <commonName>
+[-subjectAltName <subjectAltName>]
+[-subjectAltName <subjectAltName>]</pre>
 
 For example:<br>
 <pre>      # ./mkcert.pl -commonName mailstore.se.lemche.net \<br>
