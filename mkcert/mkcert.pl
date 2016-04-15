@@ -24,10 +24,12 @@ our (%configuration);
 
 # Get the options from the command line
 GetOptions(
-			'nsCertType=s'     => \@{ $configuration{'nsCertType'} },
-			'subjectAltName=s' => \@{ $configuration{'subjectAltNames'} },
-			'commonName=s'     => \$configuration{'commonName'},
-			'conf=s'           => \$configuration{'file'}
+    'nsCertType=s'           => \@{ $configuration{'nsCertType'} },
+    'subjectAltName=s'       => \@{ $configuration{'subjectAltNames'} },
+    'commonName=s'           => \$configuration{'commonName'},
+    'conf=s'                 => \$configuration{'file'},
+    'caPassword=s'           => \$configuration{'caPassword'},
+    'certificatePassword=s'  => \$configuration{'certificatePassword'}
 );
 
 # Valid options supplied with script
@@ -57,29 +59,26 @@ GetOptions(
 # Print a summary
 &summary();
 
+print $configuration{'certificatePassword'};
+
 # Run scripts?
 &run_scripts();
 
 sub validate_options {
+    print "Validating options ...\n";
+    my $syntax =
+"Usage: mkcert -commonName <commonName> [-nsCertType <server> [-nsCertType <type>]] [-subjectAltName <subjectAltName> [-subjectAltName <subjectAltName>]] [-conf <configuration-file>] [-caPassword <CA password>] [-certificatePassword <certificate password>]\n";
 
-	print "Validating options ...\n";
+    # If commonName have not been defined then die
+    die $syntax . "\n\tcommonName have not been set -- exitting!\n\n" if !( $configuration{'commonName'} );
 
-	my $syntax =
-"Usage: mkcert -commonName <commonName> [-nsCertType <server> [-nsCertType = <type>]] [-subjectAltName <subjectAltName> [-subjectAltName <subjectAltName>]] [-conf <configuration-file>]\n";
-
-	# If commonName have not been defined then die
-	die $syntax . "\n\tcommonName have not been set -- exitting!\n\n"
-	  if !( $configuration{'commonName'} );
-
-	# If nsCertType have been defined but doesn't have the right syntax then die
-	foreach my $nsCertType ( @{ $configuration{'nsCertType'} } ) {
-		unless (    ( $nsCertType eq 'server' )
-				 || ( $nsCertType eq 'client' )
-				 || ( $nsCertType eq 'email' )
-				 || ( $nsCertType eq 'objsign' ) )
-		{
-			die $syntax . "
-
+    # If nsCertType have been defined but doesn't have the right syntax then die
+    foreach my $nsCertType ( @{ $configuration{'nsCertType'} } ) {
+        unless ( ( $nsCertType eq 'server' )
+            || ( $nsCertType eq 'client' )
+            || ( $nsCertType eq 'email' )
+            || ( $nsCertType eq 'objsign' ) ) {
+            die $syntax . "
                 nsCertType can be the following:
 
                         server:  A typical server certificate
@@ -88,20 +87,19 @@ sub validate_options {
                         objsign: Allowed to sign other objects
 
 ";
-		}
-	}
+        }
+    }
 
 # If subjectAltName have been defined but doesn't have the right syntax then die
-	foreach my $subjectAltName ( @{ $configuration{'subjectAltNames'} } ) {
-		unless (    ( $subjectAltName =~ /^email:/ )
-				 || ( $subjectAltName =~ /^URI:/ )
-				 || ( $subjectAltName =~ /^DNS:/ )
-				 || ( $subjectAltName =~ /^RID:/ )
-				 || ( $subjectAltName =~ /^IP:/ )
-				 || ( $subjectAltName =~ /^dirName:/ )
-				 || ( $subjectAltName =~ /^otherName:/ ) )
-		{
-			die $syntax . "
+    foreach my $subjectAltName ( @{ $configuration{'subjectAltNames'} } ) {
+        unless ( ( $subjectAltName =~ /^email:/ )
+            || ( $subjectAltName =~ /^URI:/ )
+            || ( $subjectAltName =~ /^DNS:/ )
+            || ( $subjectAltName =~ /^RID:/ )
+            || ( $subjectAltName =~ /^IP:/ )
+            || ( $subjectAltName =~ /^dirName:/ )
+            || ( $subjectAltName =~ /^otherName:/ ) ) {
+            die $syntax . "
 
                 subjectAltName can be the following:
 
@@ -117,232 +115,230 @@ sub validate_options {
                                    ASN1_generate_nconf() format.
 
 ";
-		}
-	}
+        }
+    }
 
-	# If a configuration file was not defined as a option
-	unless ( $configuration{'file'} ) {
-
-		# Then set a default one
-		$configuration{'file'} = "./mkcert.cfg";
-	}
-
+    # If a configuration file was not defined as a option
+    unless ( $configuration{'file'} ) {
+        # Then set a default one
+        $configuration{'file'} = "./mkcert.cfg";
+    }
 }
 
 sub read_configuration_file {
-	print "Reading configuration file ...\n";
+    print "Reading configuration file ...\n";
 
-	# Defines the required parameters in the configuration file
-	@{ $configuration{'parameters'}->{'required'} } = qw(
-	  days
-	  country
-	  locality
-	  nsCaRevocationUrl
-	  organization
-	  organizationalUnit
-	  ssldir
-	  stateOrProvince
-	);
+    # Defines the required parameters in the configuration file
+    @{ $configuration{'parameters'}->{'required'} } = qw(
+      days
+      country
+      locality
+      nsCaRevocationUrl
+      organization
+      organizationalUnit
+      ssldir
+      stateOrProvince
+      caPassword
+      certificatePassword
+    );
 
-	# Defines the optional parameters in the configuration file
-	@{ $configuration{'parameters'}->{'optional'} } = qw(
-	  cacert
-	  cakey
-	  issuerAltName
-	  crlDistributionPoints
-	);
+    # Defines the optional parameters in the configuration file
+    @{ $configuration{'parameters'}->{'optional'} } = qw(
+      cacert
+      cakey
+      caname
+      issuerAltName
+      crlDistributionPoints
+    );
 
-	# Defines the optional netscape parameters in the configuration file
-	@{ $configuration{'parameters'}->{'netscape'} } = qw(
-	  nsBaseUrl
-	  nsCaRevocationUrl
-	  nsRevocationUrl
-	  nsRenewalUrl
-	  nsCaPolicyUrl
-	);
+    # Defines the optional netscape parameters in the configuration file
+    @{ $configuration{'parameters'}->{'netscape'} } = qw(
+      nsBaseUrl
+      nsCaRevocationUrl
+      nsRevocationUrl
+      nsRenewalUrl
+      nsCaPolicyUrl
+    );
 
-	# Opens configuration file
-	open( CONFIG_FILE, $_[0] )
-	  || die "cannot open " . $_[0] . ": " . $! . "\n";
+    # Opens configuration file
+    open( CONFIG_FILE, $_[0] ) || die "cannot open " . $_[0] . ": " . $! . "\n";
 
-	# Parses the configuration file, line for line
-	foreach my $line (<CONFIG_FILE>) {
+    # Parses the configuration file, line for line
+    foreach my $line (<CONFIG_FILE>) {
 
-		# Remove line ending
-		chomp($line);
+        # Remove line ending
+        chomp($line);
 
-		# If the line is a comment,
-		# contains only spaces
-		# or tabs,
-		# or is a an empty line
-		if (    $line =~ /^#/
-			 || $line =~ /^\s+$/
-			 || $line =~ /^\s+$/
-			 || $line =~ /^\t+$/
-			 || $line =~ /^$/ )
-		{
+        # If the line is a comment,
+        # contains only spaces
+        # or tabs,
+        # or is a an empty line
+        if (   $line =~ /^#/
+            || $line =~ /^\s+$/
+            || $line =~ /^\s+$/
+            || $line =~ /^\t+$/
+            || $line =~ /^$/ ) {
 
-			# then goto to next line
-			next;
-		}
+            # then goto to next line
+            next;
+        }
 
-		# Splits the line into parameter and value
-		my ( $parameter, $value ) = split( / = /, $line );
+        # Splits the line into parameter and value
+        my ( $parameter, $value ) = split( / = /, $line );
 
-		# Strips any trailing spaces for parameter
-		$parameter =~ s/\s+$//g;
+        # Strips any trailing spaces for parameter
+        $parameter =~ s/\s+$//g;
 
-		# Strips any leading spaces for value
-		$value =~ s/^\s+//g;
+        # Strips any leading spaces for value
+        $value =~ s/^\s+//g;
 
-		# Strips any trailing spaces for value
-		$value =~ s/\s+$//g;
+        # Strips any trailing spaces for value
+        $value =~ s/\s+$//g;
 
-		# Defines a validation check
-		our $validated = 0;
+        # Defines a validation check
+        our $validated = 0;
 
-		# iterate over parameter groups
-		foreach my $valid_parameters_group (
-									 keys( %{ $configuration{'parameters'} } ) )
-		{
+        # iterate over parameter groups
+        foreach my $valid_parameters_group (
+            keys( %{ $configuration{'parameters'} } ) ) {
 
-			# For each valid parameter
-			foreach my $valid_parameter (
-				  @{ $configuration{'parameters'}->{$valid_parameters_group} } )
-			{
+            # For each valid parameter
+            foreach my $valid_parameter (
+                @{ $configuration{'parameters'}->{$valid_parameters_group} } ) {
 
-				# if the valid parameter matches the parameter
-				if ( $valid_parameter eq $parameter ) {
+                # if the valid parameter matches the parameter
+                if ( $valid_parameter eq $parameter ) {
 
-					# then use the value from the configuration file
-					$configuration{$valid_parameter} = $value;
+                    # if parameter is not already set on command line
+                    if ( $configuration{$valid_parameter} eq '' ) {
 
-					# declare the parameter as validated
-					$validated = 1;
+                        # then use the value from the configuration file
+                        $configuration{$valid_parameter} = $value;
+                    }
 
-					# and break the loop
-					last;
-				}
-			}
+                    # declare the parameter as validated
+                    $validated = 1;
 
-			# if validated
-			if ( $validated eq "1" ) {
+                    # and break the loop
+                    last;
+                }
+            }
 
-				# then break loop
-				last;
-			}
-		}
+            # if validated
+            if ( $validated eq "1" ) {
 
-		# If the parameter is not a valid setting
-		unless ( $validated eq "1" ) {
+                # then break loop
+                last;
+            }
+        }
 
-			# then die
-			die 'The parameter, "'
-			  . $parameter . '"'
-			  . " used in "
-			  . $_[0]
-			  . " is unknown -- exitting!\n";
-		}
+        # If the parameter is not a valid setting
+        unless ( $validated eq "1" ) {
 
-	}
+            # then die
+            die 'The parameter, "'
+              . $parameter . '"'
+              . " used in "
+              . $_[0]
+              . " is unknown -- exitting!\n";
+        }
+    }
 
-	# Close configuration file
-	close(CONFIG_FILE);
+    # Close configuration file
+    close(CONFIG_FILE);
 
-	# For each required parameter
-	foreach
-	  my $required_parameter ( @{ $configuration{'parameters'}->{'required'} } )
-	{
-
-		# if parameter is unset
-		if ( $configuration{$required_parameter} eq "" ) {
-
-			# then die
-			die $required_parameter . " haven't been defined -- exitting!\n";
-		}
-	}
+    # For each required parameter
+    foreach
+      my $required_parameter ( @{ $configuration{'parameters'}->{'required'} } ) {
+        # if parameter is unset
+        if ( $configuration{$required_parameter} eq "" ) {
+            # then die
+            die $required_parameter . " haven't been defined -- exitting!\n";
+        }
+    }
 }
 
 sub sanity_checks {
 
-	print "Checks if files and directories exist ...\n";
+    print "Checks if files and directories exist ...\n";
 
-	# if directory where cnf files are placed doens't exist, then create it'
-	&check_directory( $configuration{'ssldir'} . "/configs" );
+    # if directory where cnf files are placed doens't exist, then create it'
+    &check_directory( $configuration{'ssldir'} . "/configs" );
 
-# if directory where generation scripts are placed doens't exist, then create it'
-	&check_directory( $configuration{'ssldir'} . "/scripts" );
+    # if directory where generation scripts are placed doens't exist, then create it'
+    &check_directory( $configuration{'ssldir'} . "/scripts" );
 
-	# If the CA certificate was defined in the configuration file
-	&check_ca( "cacert", "cacert.pem", "CA certificate" );
+    # If the CA certificate was defined in the configuration file
+    &check_ca( "cacert", "cacert.pem", "CA certificate" );
 
-	# If the CA key was defined in the configuration file
-	&check_ca( "cakey", "private/cakey.pem", "CA key" );
+    # If the CA key was defined in the configuration file
+    &check_ca( "cakey", "private/cakey.pem", "CA key" );
 }
 
 sub check_directory {
 
-	# unless defined directory exist
-	unless ( -d $_[0] ) {
+    # unless defined directory exist
+    unless ( -d $_[0] ) {
 
-		# then create
-		mkdir("$_[0]")
-		  || die "FAILED\ncannot create, " . $_[0] . ": " . $! . "\n";
-	}
+        # then create
+        mkdir("$_[0]") || die "FAILED\ncannot create, " . $_[0] . ": " . $! . "\n";
+    }
 }
 
 sub check_ca {
 
-	# If the $_[0] was defined in the configuration file
-	if ( $configuration{ $_[0] } ) {
+    # If the $_[0] was defined in the configuration file
+    if ( $configuration{ $_[0] } ) {
 
-		# then if file doesn't 'exist
-		unless ( -f $configuration{ $_[0] } ) {
+        # then if file doesn't 'exist
+        unless ( -f $configuration{ $_[0] } ) {
 
-			# then print
-			die "FAILED\nthe "
-			  . $_[2]
-			  . " defined in "
-			  . $configuration{'file'} . ", "
-			  . $configuration{ $_[0] }
-			  . "doesn't exist -- exitting\n";
-		}
-	} else {
+            # then print
+            die "FAILED\nthe "
+              . $_[2]
+              . " defined in "
+              . $configuration{'file'} . ", "
+              . $configuration{ $_[0] }
+              . "doesn't exist -- exitting\n";
+        }
+    }
+    else {
 
-		# otherwise check if it exist at the default location
-		if ( -f $configuration{'ssldir'} . "/" . $_[1] ) {
+        # otherwise check if it exist at the default location
+        if ( -f $configuration{'ssldir'} . "/" . $_[1] ) {
 
-			# then use the default location
-			$configuration{ $_[0] } = $configuration{'ssldir'} . "/" . $_[1];
-		} else {
+            # then use the default location
+            $configuration{ $_[0] } = $configuration{'ssldir'} . "/" . $_[1];
+        }
+        else {
 
-			# or die, saying that it can't find it
-			die "FAILED\ncan't find your "
-			  . $_[2]
-			  . " , try defining it in the configurtion file, "
-			  . $configuration{'file'}
-			  . " -- exitting\n";
-		}
-	}
+            # or die, saying that it can't find it
+            die "FAILED\ncan't find your "
+              . $_[2]
+              . " , try defining it in the configurtion file, "
+              . $configuration{'file'}
+              . " -- exitting\n";
+        }
+    }
 }
 
 sub make_openssl_cnf {
 
-	print "Generating OpenSSL configuration ...\n";
+    print "Generating OpenSSL configuration ...\n";
 
-	# Open the .cnf file
-	open( CNF,
-		 " >$configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf" )
-	  || die "FAILED\ncannot open file, "
-	  . $configuration{'ssldir'}
-	  . "/configs/"
-	  . $configuration{'commonName'}
-	  . ".cnf: "
-	  . $! . "\n";
+    # Open the .cnf file
+    open( CNF,
+        " >$configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf" )
+      || die "FAILED\ncannot open file, "
+      . $configuration{'ssldir'}
+      . "/configs/"
+      . $configuration{'commonName'}
+      . ".cnf: "
+      . $! . "\n";
 
-	# Generate the standard configuration using the values from mkcert.cfg
-	# and the options
-	print CNF <<EOT;
+    # Generate the standard configuration using the values from mkcert.cfg
+    # and the options
+    print CNF <<EOT;
 HOME                    = .
 RANDFILE                = \$ENV::HOME/.rnd
 oid_section             = new_oids
@@ -369,6 +365,7 @@ default_crl_days= 30
 default_md      = sha1
 preserve        = no
 policy          = policy_match
+unique_subject  = yes
 [ policy_match ]
 countryName             = match
 stateOrProvinceName     = match
@@ -420,83 +417,77 @@ unstructuredName                = An optional company name
 basicConstraints=CA:FALSE
 EOT
 
-	# define the nsCertType if requested
-	unless ( $configuration{'nsCertType'} eq "" ) {
-		print CNF 'nsCertType                      = ';
-		our ($nsCertType_left);
-		until ( $nsCertType_left eq 0 ) {
-			my $nsCertType = shift( @{ $configuration{'nsCertType'} } );
-			print CNF $nsCertType;
-			$nsCertType_left = @{ $configuration{'nsCertType'} };
-			unless ( $nsCertType_left eq 0 ) {
-				print CNF ", ";
-			}
-		}
-		print CNF "\n";
-	}
+    # define the nsCertType if requested
+    unless ( $configuration{'nsCertType'}->[0] eq "" ) {
+        print CNF 'nsCertType                      = ';
+        our ($nsCertType_left);
+        until ( $nsCertType_left eq 0 ) {
+            my $nsCertType = shift( @{ $configuration{'nsCertType'} } );
+            print CNF $nsCertType;
+            $nsCertType_left = @{ $configuration{'nsCertType'} };
+            unless ( $nsCertType_left eq 0 ) {
+                print CNF ", ";
+            }
+        }
+        print CNF "\n";
+    }
 
-	# Print a little more standard stuff
-	print CNF <<EOT;
+    # Print a little more standard stuff
+    print CNF <<EOT;
 nsComment                       = "mkcert.pl generated certificate"
 subjectKeyIdentifier            = hash
 authorityKeyIdentifier          = keyid,issuer
 EOT
-	for
-	  my $netscape_parameter ( @{ $configuration{'parameters'}->{'netscape'} } )
-	{
-		unless ( $configuration{$netscape_parameter} eq "" ) {
-			print CNF $netscape_parameter . " = "
-			  . $configuration{$netscape_parameter} . "\n";
-		}
-	}
-	if ( $configuration{'issuerAltName'} ) {
-		print CNF "issuerAltName = URI:"
-		  . $configuration{'issuerAltName'} . "\n";
-	}
-	if ( $configuration{'crlDistributionPoints'} ) {
-		print CNF "crlDistributionPoints = URI:"
-		  . $configuration{'crlDistributionPoints'} . "\n";
-	}
+    for my $netscape_parameter ( @{ $configuration{'parameters'}->{'netscape'} } ) {
+        unless ( $configuration{$netscape_parameter} eq "" ) {
+            print CNF $netscape_parameter . " = "
+              . $configuration{$netscape_parameter} . "\n";
+        }
+    }
+    if ( $configuration{'issuerAltName'} ) {
+        print CNF "issuerAltName = URI:"
+          . $configuration{'issuerAltName'} . "\n";
+    }
+    if ( $configuration{'crlDistributionPoints'} ) {
+        print CNF "crlDistributionPoints = URI:"
+          . $configuration{'crlDistributionPoints'} . "\n";
+    }
 
-	# If there were any subjectAltNames supplied
-	if ( $configuration{'subjectAltNames'}->[0] ) {
+    # If there were any subjectAltNames supplied
+    if ( $configuration{'subjectAltNames'}->[0] ) {
 
-		# then add the parameter
-		print CNF "subjectAltName = ";
+        # then add the parameter
+        print CNF "subjectAltName = ";
 
-		# first count how many subjectAltNames are supplied
-		my $subjectAltName_totals = @{ $configuration{'subjectAltNames'} };
+        # first count how many subjectAltNames are supplied
+        my $subjectAltName_totals = @{ $configuration{'subjectAltNames'} };
 
-		# sets a counter
-		our $subjectAltName_count = 0;
+        # sets a counter
+        our $subjectAltName_count = 0;
 
-		# until counter equals the amount of subjectAltNames
-		until ( $subjectAltName_count eq $subjectAltName_totals ) {
+        # until counter equals the amount of subjectAltNames
+        until ( $subjectAltName_count eq $subjectAltName_totals ) {
 
-			# add each subjectAltName to the parameter
-			print CNF $configuration{'subjectAltNames'}
-			  ->[$subjectAltName_count];
+            # add each subjectAltName to the parameter
+            print CNF $configuration{'subjectAltNames'}->[$subjectAltName_count];
 
-			# increase the counter
-			$subjectAltName_count++;
+            # increase the counter
+            $subjectAltName_count++;
 
-			# unless there are no more subjectAltNames to be added
-			unless (
-				   $configuration{'subjectAltNames'}->[$subjectAltName_count] eq
-				   "" )
-			{
+            # unless there are no more subjectAltNames to be added
+            unless ( $configuration{'subjectAltNames'}->[$subjectAltName_count] eq "" ) {
 
-				# add a comma to seperate them
-				print CNF ", ";
-			}
-		}
+                # add a comma to seperate them
+                print CNF ", ";
+            }
+        }
 
-		# End the parameter
-		print CNF "\n";
-	}
+        # End the parameter
+        print CNF "\n";
+    }
 
-	# Add the rest of the configuration
-	print CNF <<EOT;
+    # Add the rest of the configuration
+    print CNF <<EOT;
 [ v3_req ]
 basicConstraints = CA:FALSE
 keyUsage = nonRepudiation, digitalSignature, keyEncipherment
@@ -514,32 +505,28 @@ authorityKeyIdentifier=keyid,issuer:always
 proxyCertInfo=critical,language:id-ppl-anyLanguage,pathlen:3,policy:foo
 EOT
 
-	# close the .cnf file
-	close(CNF)
-	  || die "FAILED\ncannot close file, "
-	  . $configuration{'ssldir'}
-	  . "/configs/"
-	  . $configuration{'commonName'}
-	  . ".cnf: "
-	  . $! . "\n";
+    # close the .cnf file
+    close(CNF) || die "FAILED\ncannot close file, "
+      . $configuration{'ssldir'}
+      . "/configs/"
+      . $configuration{'commonName'}
+      . ".cnf: "
+      . $! . "\n";
 }
 
 sub make_creation_script {
-	print "Generating key and certificate request creation script ... \n";
+    print "Generating key and certificate request creation script ... \n";
 
-	# Get localtime
-	my $date = localtime();
+    # Get localtime
+    my $date = localtime();
 
-	# Open the certificate generation script
-	open( SCRIPT,
-">$configuration{'ssldir'}/scripts/create-$configuration{'commonName'}.sh"
-	  )
-	  || die "FAILED\ncannot open file, "
-	  . $configuration{'ssldir'}
-	  . "/scripts/create-"
-	  . $configuration{'commonName'} . ".sh"
-	  . $! . "\n";
-	print SCRIPT <<EOF;
+    # Open the certificate generation script
+    open( SCRIPT, ">$configuration{'ssldir'}/scripts/create-$configuration{'commonName'}.sh" ) || die "FAILED\ncannot open file, "
+      . $configuration{'ssldir'}
+      . "/scripts/create-"
+      . $configuration{'commonName'} . ".sh"
+      . $! . "\n";
+    print SCRIPT <<EOF;
 #!/bin/sh
 #
 # This script generates the CSR and KEY for the CommonName:
@@ -569,7 +556,7 @@ umask 0127
 echo
 
 echo "Generate certificate req and certificate private key"
-openssl req -outform PEM -out "$configuration{'ssldir'}/$configuration{'commonName'}-req.pem" -newkey rsa:1024 -nodes -config "$configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf" -batch
+openssl req -outform PEM -out "$configuration{'ssldir'}/$configuration{'commonName'}-req.pem" -passin pass:$configuration{'certificatePassword'} -newkey rsa:1024 -nodes -config "$configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf" -batch
 echo
 
 echo "Loosens the permissions on CSR"
@@ -592,34 +579,27 @@ echo "Running the signing script"
 . "$configuration{'ssldir'}/scripts/sign-$configuration{'commonName'}.sh"
 echo
 EOF
-	close(SCRIPT)
-	  || die "FAILED\ncannot close file, "
-	  . $configuration{'ssldir'}
-	  . "/scripts/create-"
-	  . $configuration{'commonName'} . ".sh"
-	  . $! . "\n";
-	chmod( 0755,
-"$configuration{'ssldir'}/scripts/create-$configuration{'commonName'}.sh"
-	);
-
+    close(SCRIPT) || die "FAILED\ncannot close file, "
+      . $configuration{'ssldir'}
+      . "/scripts/create-"
+      . $configuration{'commonName'} . ".sh"
+      . $! . "\n";
+    chmod( 0755, "$configuration{'ssldir'}/scripts/create-$configuration{'commonName'}.sh" );
 }
 
 sub make_signing_script {
-	print "Generating certificate request signing script ... \n";
+    print "Generating certificate request signing script ... \n";
 
-	# Get localtime
-	my $date = localtime();
+    # Get localtime
+    my $date = localtime();
 
-	# Open the signing script
-	open( SCRIPT,
-		">$configuration{'ssldir'}/scripts/sign-$configuration{'commonName'}.sh"
-	  )
-	  || die "FAILED\ncannot open file, "
-	  . $configuration{'ssldir'}
-	  . "/scripts/sign-"
-	  . $configuration{'commonName'} . ".sh"
-	  . $! . "\n";
-	print SCRIPT <<EOF;
+    # Open the signing script
+    open( SCRIPT, ">$configuration{'ssldir'}/scripts/sign-$configuration{'commonName'}.sh" ) || die "FAILED\ncannot open file, "
+      . $configuration{'ssldir'}
+      . "/scripts/sign-"
+      . $configuration{'commonName'} . ".sh"
+      . $! . "\n";
+    print SCRIPT <<EOF;
 #!/bin/sh
 #
 # This script sign the CSR for the CommonName:
@@ -657,7 +637,7 @@ umask 0122
 echo
 
 echo "Generate the certificate and signs it with the ca-key"
-openssl ca -config "$configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf" -out "$configuration{'ssldir'}/$configuration{'commonName'}-cert.pem" -policy policy_anything -batch -infiles "$configuration{'ssldir'}/$configuration{'commonName'}-req.pem"
+openssl ca -config "$configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf" -passin pass:$configuration{'caPassword'} -out "$configuration{'ssldir'}/$configuration{'commonName'}-cert.pem" -policy policy_anything -batch -infiles "$configuration{'ssldir'}/$configuration{'commonName'}-req.pem"
 echo
 
 echo "Create DER formatted certificate from the PEM formatted certificate"
@@ -669,7 +649,13 @@ umask 0120
 echo
 
 echo "Creating PKCS12 formatted certificate from the PEM formatted certificate and PEM formmated key"
-openssl pkcs12 -export -in "$configuration{'ssldir'}/$configuration{'commonName'}-cert.pem" -inkey "$configuration{'ssldir'}/private/$configuration{'commonName'}-key.pem" -out "$configuration{'ssldir'}/$configuration{'commonName'}-cert.p12" -name "$configuration{'commonName'}"
+#openssl pkcs12 -export -out "$configuration{'ssldir'}/private/$configuration{'commonName'}-cert.p12" -in "$configuration{'ssldir'}/$configuration{'commonName'}-cert.pem" -inkey "$configuration{'ssldir'}/private/$configuration{'commonName'}-key.pem" -name "$configuration{'commonName'}" -certfile "$configuration{'cacert'}" -caname "$configuration{'caname'}"
+#echo "$configuration{'cacert'}"
+#echo "$configuration{'ssldir'}/$configuration{'commonName'}-cert.pem"
+#echo "$configuration{'ssldir'}/private/$configuration{'commonName'}-key.pem"
+cat "$configuration{'cacert'}" "$configuration{'ssldir'}/$configuration{'commonName'}-cert.pem" "$configuration{'ssldir'}/private/$configuration{'commonName'}-key.pem" > "/tmp/$configuration{'commonName'}.pem"
+openssl pkcs12 -export -passout pass:$configuration{'certificatePassword'} -out "$configuration{'ssldir'}/private/$configuration{'commonName'}-cert.p12" -in "/tmp/$configuration{'commonName'}.pem" -name "$configuration{'commonName'}" -caname "$configuration{'caname'}"
+#rm -f "/tmp/$configuration{'commonName'}.pem"
 echo
 
 echo "Restores the old umask"
@@ -680,34 +666,27 @@ echo "Return to old PWD"
 popd > /dev/null
 echo
 EOF
-	close(SCRIPT)
-	  || die "FAILED\ncannot close file, "
-	  . $configuration{'ssldir'}
-	  . "/scripts/sign-"
-	  . $configuration{'commonName'} . ".sh"
-	  . $! . "\n";
-	chmod( 0755,
-"$configuration{'ssldir'}/scripts/sign-$configuration{'commonName'}.sh"
-	);
-
+    close(SCRIPT) || die "FAILED\ncannot close file, "
+      . $configuration{'ssldir'}
+      . "/scripts/sign-"
+      . $configuration{'commonName'} . ".sh"
+      . $! . "\n";
+    chmod( 0755, "$configuration{'ssldir'}/scripts/sign-$configuration{'commonName'}.sh" );
 }
 
 sub make_revokation_script {
-	print "Generating revokation script ... \n";
+    print "Generating revokation script ... \n";
 
-	# Get localtime
-	my $date = localtime();
+    # Get localtime
+    my $date = localtime();
 
-	# Open the certificate revokation script
-	open( SCRIPT,
-">$configuration{'ssldir'}/scripts/revoke-$configuration{'commonName'}.sh"
-	  )
-	  || die "FAILED\ncannot open file, "
-	  . $configuration{'ssldir'}
-	  . "/scripts/revoke-"
-	  . $configuration{'commonName'} . ".sh"
-	  . $! . "\n";
-	print SCRIPT <<EOF;
+    # Open the certificate revokation script
+    open( SCRIPT, ">$configuration{'ssldir'}/scripts/revoke-$configuration{'commonName'}.sh" ) || die "FAILED\ncannot open file, "
+      . $configuration{'ssldir'}
+      . "/scripts/revoke-"
+      . $configuration{'commonName'} . ".sh"
+      . $! . "\n";
+    print SCRIPT <<EOF;
 #!/bin/sh
 #
 # This script revokes the certificate with the CommonName:
@@ -729,11 +708,11 @@ cd "$configuration{'ssldir'}"
 echo
 
 echo "Revokes the script at update key database"
-openssl ca -config "$configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf" -revoke "$configuration{'ssldir'}/$configuration{'commonName'}-cert.pem"
+openssl ca -config "$configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf" -passin pass:$configuration{'caPassword'} -revoke "$configuration{'ssldir'}/$configuration{'commonName'}-cert.pem"
 echo
 
 echo "Generate/updates certificate revokation list"
-openssl ca -config "$configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf" -gencrl -out "$configuration{'ssldir'}/crl/ca.crl"
+openssl ca -config "$configuration{'ssldir'}/configs/$configuration{'commonName'}.cnf" -passin pass:$configuration{'caPassword'} -gencrl -out "$configuration{'ssldir'}/crl/ca.crl"
 echo
 
 echo "Returning to old PWD"
@@ -741,34 +720,27 @@ popd > /dev/null
 echo
 
 EOF
-	close(SCRIPT)
-	  || die "FAILED\ncannot close file, "
-	  . $configuration{'ssldir'}
-	  . "/scripts/revoke-"
-	  . $configuration{'commonName'} . ".sh"
-	  . $! . "\n";
-	chmod( 0755,
-"$configuration{'ssldir'}/scripts/revoke-$configuration{'commonName'}.sh"
-	);
-
+    close(SCRIPT) || die "FAILED\ncannot close file, "
+      . $configuration{'ssldir'}
+      . "/scripts/revoke-"
+      . $configuration{'commonName'} . ".sh"
+      . $! . "\n";
+    chmod( 0755, "$configuration{'ssldir'}/scripts/revoke-$configuration{'commonName'}.sh" );
 }
 
 sub make_renewal_script {
-	print "Generating renewal script ... \n";
+    print "Generating renewal script ... \n";
 
-	# Get localtime
-	my $date = localtime();
+    # Get localtime
+    my $date = localtime();
 
-	# Open the certificate renewal script
-	open( SCRIPT,
-">$configuration{'ssldir'}/scripts/renew-$configuration{'commonName'}.sh"
-	  )
-	  || die "FAILED\ncannot open file, "
-	  . $configuration{'ssldir'}
-	  . "/scripts/renew-"
-	  . $configuration{'commonName'} . ".sh"
-	  . $! . "\n";
-	print SCRIPT <<EOF;
+    # Open the certificate renewal script
+    open( SCRIPT, ">$configuration{'ssldir'}/scripts/renew-$configuration{'commonName'}.sh" ) || die "FAILED\ncannot open file, "
+      . $configuration{'ssldir'}
+      . "/scripts/renew-"
+      . $configuration{'commonName'} . ".sh"
+      . $! . "\n";
+    print SCRIPT <<EOF;
 #!/bin/sh
 #
 # This script renews the certificate with the CommonName:
@@ -802,72 +774,66 @@ popd > /dev/null
 echo
 
 EOF
-	close(SCRIPT)
-	  || die "FAILED\ncannot close file, "
-	  . $configuration{'ssldir'}
-	  . "/scripts/renew-"
-	  . $configuration{'commonName'} . ".sh"
-	  . $! . "\n";
-	chmod( 0755,
-"$configuration{'ssldir'}/scripts/renew-$configuration{'commonName'}.sh"
-	);
-
+    close(SCRIPT) || die "FAILED\ncannot close file, "
+      . $configuration{'ssldir'}
+      . "/scripts/renew-"
+      . $configuration{'commonName'} . ".sh"
+      . $! . "\n";
+    chmod( 0755, "$configuration{'ssldir'}/scripts/renew-$configuration{'commonName'}.sh" );
 }
 
 sub summary {
 
-	# this subrouting just prints a summary with the .cnf file and script
-	print "\n\nSUMMARY:\n\n";
-	print "OpenSSL configuration for this server certificate is saved as:\n";
-	print "\t"
-	  . $configuration{'ssldir'}
-	  . "/configs/"
-	  . $configuration{'commonName'}
-	  . ".cnf\n\n";
-	print "Script to generate certificate request and key is saved as:\n";
-	print "\t"
-	  . $configuration{'ssldir'}
-	  . "/scripts/create-"
-	  . $configuration{'commonName'}
-	  . ".sh\n\n";
-	print
+    # this subrouting just prints a summary with the .cnf file and script
+    print "\n\nSUMMARY:\n\n";
+    print "OpenSSL configuration for this server certificate is saved as:\n";
+    print "\t"
+      . $configuration{'ssldir'}
+      . "/configs/"
+      . $configuration{'commonName'}
+      . ".cnf\n\n";
+    print "Script to generate certificate request and key is saved as:\n";
+    print "\t"
+      . $configuration{'ssldir'}
+      . "/scripts/create-"
+      . $configuration{'commonName'}
+      . ".sh\n\n";
+    print
 "Script to sign certificate request and generate signed certificate is saved as:\n";
-	print "\t"
-	  . $configuration{'ssldir'}
-	  . "/scripts/sign-"
-	  . $configuration{'commonName'}
-	  . ".sh\n\n";
-	print "Script to renew a certificate is saved as:\n";
-	print "\t"
-	  . $configuration{'ssldir'}
-	  . "/scripts/renew-"
-	  . $configuration{'commonName'}
-	  . ".sh\n\n";
-	print "Script to revoke a certificate is saved as:\n";
-	print "\t"
-	  . $configuration{'ssldir'}
-	  . "/scripts/revoke-"
-	  . $configuration{'commonName'}
-	  . ".sh\n\n";
+    print "\t"
+      . $configuration{'ssldir'}
+      . "/scripts/sign-"
+      . $configuration{'commonName'}
+      . ".sh\n\n";
+    print "Script to renew a certificate is saved as:\n";
+    print "\t"
+      . $configuration{'ssldir'}
+      . "/scripts/renew-"
+      . $configuration{'commonName'}
+      . ".sh\n\n";
+    print "Script to revoke a certificate is saved as:\n";
+    print "\t"
+      . $configuration{'ssldir'}
+      . "/scripts/revoke-"
+      . $configuration{'commonName'}
+      . ".sh\n\n";
 }
 
 sub run_scripts {
 
-	# Should we just run the generation script now?
-	print "Run creation script now? (this will also sign the CSR) [yes]: ";
+    # Should we just run the generation script now?
+    print "Run creation script now? (this will also sign the CSR) [yes]: ";
 
-	# Read input from STDIN
-	my $answer = <STDIN>;
+    # Read input from STDIN
+    my $answer = <STDIN>;
 
-	# Strip line-ending
-	chomp($answer);
+    # Strip line-ending
+    chomp($answer);
 
-	# If input equals something with yes or just [ENTER]
-	if ( $answer eq "yes" || $answer eq "y" || $answer eq "Y" || $answer eq "" )
-	{
+    # If input equals something with yes or just [ENTER]
+    unless ( $answer eq "no" || $answer eq "n" ) {
 
-		# then run the script
-		system(   "\"$configuration{'ssldir'}/scripts/create-$configuration{'commonName'}.sh\""
-		);
-	}
+        # then run the script
+        system( "\"$configuration{'ssldir'}/scripts/create-$configuration{'commonName'}.sh\"" );
+    }
 }
