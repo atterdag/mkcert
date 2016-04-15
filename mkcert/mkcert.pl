@@ -59,8 +59,6 @@ GetOptions(
 # Print a summary
 &summary();
 
-print $configuration{'certificatePassword'};
-
 # Run scripts?
 &run_scripts();
 
